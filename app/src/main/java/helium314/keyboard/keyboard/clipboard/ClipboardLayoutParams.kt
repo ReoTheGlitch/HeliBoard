@@ -16,7 +16,12 @@ class ClipboardLayoutParams(ctx: Context) {
     private val keyVerticalGap: Int
     private val keyHorizontalGap: Int
     private val listHeight: Int
+    private val listHeightWithInput: Int
     val bottomRowKeyboardHeight: Int
+    /** height of the folder bar at the top of the clipboard panel */
+    val headerHeight: Int
+    /** height of one row of the small input keyboard, which replaces the bottom row while typing */
+    val inputRowHeight: Int
 
     init {
         val res = ctx.resources
@@ -35,14 +40,18 @@ class ClipboardLayoutParams(ctx: Context) {
 
         val rowCount = KeyboardParams.DEFAULT_KEYBOARD_ROWS + if (sv.mShowsNumberRow) 1 else 0
         bottomRowKeyboardHeight = (defaultKeyboardHeight - bottomPadding - topPadding) / rowCount - keyVerticalGap / 2
+        headerHeight = bottomRowKeyboardHeight * 3 / 4
+        inputRowHeight = bottomRowKeyboardHeight * 3 / 5
         // height calculation is not good enough, probably also because keyboard top padding might be off by a pixel (see KeyboardParser)
         val offset = 1.25f * res.displayMetrics.density * sv.mKeyboardHeightScale
-        listHeight = defaultKeyboardHeight - bottomRowKeyboardHeight - bottomPadding + offset.toInt()
+        listHeight = defaultKeyboardHeight - headerHeight - bottomRowKeyboardHeight - bottomPadding + offset.toInt()
+        // while typing, the input keyboard (4 rows) takes the place of the bottom row
+        listHeightWithInput = defaultKeyboardHeight - headerHeight - 4 * inputRowHeight - bottomPadding + offset.toInt()
     }
 
-    fun setListProperties(recycler: RecyclerView) {
+    fun setListProperties(recycler: RecyclerView, inputKeyboardShown: Boolean = false) {
         (recycler.layoutParams as FrameLayout.LayoutParams).apply {
-            height = listHeight
+            height = if (inputKeyboardShown) listHeightWithInput else listHeight
             recycler.layoutParams = this
         }
     }

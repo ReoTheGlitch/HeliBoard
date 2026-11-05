@@ -4,21 +4,21 @@ package helium314.keyboard.latin.database
 import android.content.ClipDescription
 import android.content.ContentValues
 import android.content.Context
-import android.content.SharedPreferences
 import android.net.Uri
 import android.os.SystemClock
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
+import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
 import helium314.keyboard.latin.ClipboardHistoryEntry
 import helium314.keyboard.latin.common.FileUtils
-import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.ChecksumCalculator
 import helium314.keyboard.latin.utils.Log
-import helium314.keyboard.latin.utils.prefs
 import java.io.File
 import kotlin.collections.joinToString
+
+class ClipboardFolder(val id: Long, var name: String)
 
 /** Class providing cached access to the clipboard table */
 // currently we should not need to worry about synchronizing access (though maybe we could addClip in a coroutine, then it might be relevant)
@@ -34,11 +34,18 @@ class ClipboardDao private constructor(private val db: Database) {
     // we clean up old clips when a new clip is added, but not too frequently
     private var lastClearOldClips = 0L
 
+    // folders are cached as well, they are few
+    private val folders = mutableListOf<ClipboardFolder>().apply {
+        db.readableDatabase.query(FOLDER_TABLE, arrayOf(COLUMN_ID, COLUMN_NAME), null, null, null, null, "$COLUMN_ID ASC").use {
+            while (it.moveToNext()) add(ClipboardFolder(it.getLong(0), it.getString(1)))
+        }
+    }
+
     // cache is loaded at start and never dropped
     private val cache = mutableListOf<ClipboardHistoryEntry>().apply {
         db.readableDatabase.query(
             TABLE,
-            arrayOf(COLUMN_ID, COLUMN_TIMESTAMP, COLUMN_PINNED, COLUMN_TEXT, COLUMN_FILE, COLUMN_MIME_TYPE),
+            arrayOf(COLUMN_ID, COLUMN_TIMESTAMP, COLUMN_PINNED, COLUMN_TEXT, COLUMN_FILE, COLUMN_MIME_TYPE, COLUMN_FOLDER_ID),
             null,
             null,
             null,
@@ -53,6 +60,7 @@ class ClipboardDao private constructor(private val db: Database) {
                     it.getStringOrNull(3),
                     it.getStringOrNull(4),
                     it.getStringOrNull(5)?.split('§')?.filter { it.isNotEmpty() },
+                    it.getLongOrNull(6),
                 ))
             }
         }
@@ -96,40 +104,19 @@ class ClipboardDao private constructor(private val db: Database) {
         insertNewEntry(timestamp, pinned, description.label?.toString(), file.name, description.getMimeTypes(), context)
     }
 
-    // keep pinned and the first non-pinned, others can be deleted
-    private fun deleteIfSizeExceeded(prefs: SharedPreferences) {
-        val sizeLimit = prefs.getInt(Settings.PREF_CLIPBOARD_FILES_SIZE_LIMIT, Defaults.PREF_CLIPBOARD_FILES_SIZE_LIMIT) * 1000000
-        var size = 0L
-        var keepMin = 1
-        val toRemove = mutableListOf<ClipboardHistoryEntry>()
-        cache.forEach {
-            if (it.filename == null) return@forEach
-            val file = File(clipFilesDir, it.filename)
-            size += file.length()
-            if (it.isPinned)
-                return@forEach
-            if (size > sizeLimit) {
-                if (keepMin > 0) --keepMin
-                else toRemove.add(it)
-            }
-        }
-        delete(toRemove)
-    }
-
     /** only public for restoring backups */
-    fun insertNewEntry(timestamp: Long, pinned: Boolean, text: String?, filename: String?, mimeTypes: List<String>?, context: Context?) {
-        val cv = ContentValues(5)
+    fun insertNewEntry(timestamp: Long, pinned: Boolean, text: String?, filename: String?, mimeTypes: List<String>?, context: Context?, folderId: Long? = null) {
+        val cv = ContentValues(6)
         cv.put(COLUMN_TIMESTAMP, timestamp)
         cv.put(COLUMN_PINNED, pinned)
         cv.put(COLUMN_TEXT, text)
         cv.put(COLUMN_FILE, filename)
         // § should be a safe separator, not allowed in mime types: https://datatracker.ietf.org/doc/html/rfc6838#section-4.2
         cv.put(COLUMN_MIME_TYPE, mimeTypes?.joinToString("§"))
+        cv.put(COLUMN_FOLDER_ID, folderId)
         val rowId = db.writableDatabase.insert(TABLE, null, cv)
 
-        val entry = ClipboardHistoryEntry(rowId, timestamp, pinned, text, filename, mimeTypes)
-        if (filename != null && context != null)
-            deleteIfSizeExceeded(context.prefs())
+        val entry = ClipboardHistoryEntry(rowId, timestamp, pinned, text, filename, mimeTypes, folderId)
         cache.add(entry)
         cache.sort()
         listener?.onClipInserted(cache.indexOf(entry))
@@ -157,6 +144,24 @@ class ClipboardDao private constructor(private val db: Database) {
 
     fun sort() = cache.sort()
 
+    /** pins or unpins the given clips, like [togglePinned] they move to the top of their group. Only these rows are written. */
+    fun setPinned(ids: Collection<Long>, pinned: Boolean) = synchronized(this) {
+        val idSet = ids.toHashSet()
+        val entries = cache.filter { it.id in idSet && it.isPinned != pinned }
+        if (entries.isEmpty()) return@synchronized
+        val now = System.currentTimeMillis()
+        entries.forEach {
+            it.isPinned = pinned
+            it.timeStamp = now
+        }
+        cache.sort()
+        val cv = ContentValues(2).apply {
+            put(COLUMN_PINNED, pinned)
+            put(COLUMN_TIMESTAMP, now)
+        }
+        db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
+    }
+
     fun togglePinned(id: Long) = synchronized(this) {
         val entry = cache.first { it.id == id }
         entry.isPinned = !entry.isPinned
@@ -176,9 +181,55 @@ class ClipboardDao private constructor(private val db: Database) {
     }
 
     // RecyclerView initiates this, so we don't call listener (or we'll get an IndexOutOfRangeException from RecyclerView)
-    fun deleteClipAt(index: Int) {
-        delete(listOf(cache[index]))
+    // pinned clips are not deleted this way
+    fun deleteClipById(id: Long) {
+        val entry = cache.firstOrNull { it.id == id } ?: return
+        if (entry.isPinned) return
+        delete(listOf(entry))
     }
+
+    fun getFolders(): List<ClipboardFolder> = folders.toList()
+
+    /** returns the created folder, or null if the name is empty or already used (names are compared ignoring case) */
+    fun createFolder(name: String): ClipboardFolder? = synchronized(this) {
+        val cleanName = cleanFolderName(name) ?: return@synchronized null
+        if (folders.any { it.name.equals(cleanName, ignoreCase = true) }) return@synchronized null
+        val cv = ContentValues(1).apply { put(COLUMN_NAME, cleanName) }
+        val id = db.writableDatabase.insert(FOLDER_TABLE, null, cv)
+        if (id == -1L) return@synchronized null
+        ClipboardFolder(id, cleanName).also { folders.add(it) }
+    }
+
+    /** returns false if the name is empty or already used by another folder */
+    fun renameFolder(id: Long, name: String): Boolean = synchronized(this) {
+        val cleanName = cleanFolderName(name) ?: return@synchronized false
+        val folder = folders.firstOrNull { it.id == id } ?: return@synchronized false
+        if (folders.any { it.id != id && it.name.equals(cleanName, ignoreCase = true) }) return@synchronized false
+        folder.name = cleanName
+        val cv = ContentValues(1).apply { put(COLUMN_NAME, cleanName) }
+        db.writableDatabase.update(FOLDER_TABLE, cv, "$COLUMN_ID = $id", null)
+        true
+    }
+
+    /** only changes the clips given, folderId null means no folder */
+    fun moveClipsToFolder(ids: Collection<Long>, folderId: Long?) = synchronized(this) {
+        if (folderId != null && folders.none { it.id == folderId }) return@synchronized
+        val idSet = ids.toHashSet()
+        val entries = cache.filter { it.id in idSet }
+        if (entries.isEmpty()) return@synchronized
+        entries.forEach { it.folderId = folderId }
+        val cv = ContentValues(1).apply { put(COLUMN_FOLDER_ID, folderId) }
+        db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
+    }
+
+    /** returns the folder with this name (ignoring case), or creates it. Used when restoring or importing. */
+    fun getOrCreateFolder(name: String): ClipboardFolder? {
+        val cleanName = cleanFolderName(name) ?: return null
+        return folders.firstOrNull { it.name.equals(cleanName, ignoreCase = true) } ?: createFolder(cleanName)
+    }
+
+    private fun cleanFolderName(name: String): String? =
+        name.trim().replace(Regex("\\s+"), " ").take(MAX_FOLDER_NAME_LENGTH).trim().ifEmpty { null }
 
     private fun delete(entries: List<ClipboardHistoryEntry>) = synchronized(this) {
         if (entries.isEmpty()) return@synchronized
@@ -213,38 +264,6 @@ class ClipboardDao private constructor(private val db: Database) {
         listener?.onClipsRemoved(indicesToRemove[0], indicesToRemove.size)
     }
 
-    fun clear() {
-        if (count() == 0) return
-        cache.clear()
-        listener?.onClipsRemoved(0, count())
-        db.writableDatabase.delete(TABLE, null, null)
-    }
-
-    fun cleanupFiles(prefs: SharedPreferences) {
-        if (!prefs.getBoolean(Settings.PREF_CLIPBOARD_USE_FILES, Defaults.PREF_CLIPBOARD_USE_FILES)) {
-            delete(cache.filter { it.filename != null && !it.isPinned })
-            return
-        }
-
-        val files = clipFilesDir.listFiles()?.toMutableList() ?: return
-        val fnames = files.mapTo(HashSet()) { it.name }
-        val entries = cache.filter { it.filename != null }
-        val enames = entries.mapTo(HashSet()) { it.filename }
-
-        val filesToRemove = files.filter { it.name !in enames }
-        val entriesToRemove = entries.filter { it.filename!! !in fnames }
-        if (filesToRemove.isEmpty() && entriesToRemove.isEmpty()) {
-            deleteIfSizeExceeded(prefs)
-            return
-        }
-
-        Log.w(TAG, "deleting ${filesToRemove.size} files and ${entriesToRemove.size} clipboard entries")
-        filesToRemove.forEach { it.delete() }
-        delete(entriesToRemove)
-
-        deleteIfSizeExceeded(prefs)
-    }
-
     companion object {
         private const val TAG = "ClipboardDao"
 
@@ -257,6 +276,10 @@ class ClipboardDao private constructor(private val db: Database) {
         private const val COLUMN_TEXT = "TEXT" // we could enforce unique text, but that's only necessary if we can drop the cache (later)
         private const val COLUMN_FILE = "FILE" // path relative to files dir
         private const val COLUMN_MIME_TYPE = "MIME_TYPE" // for files, actually a list of mime types according to clipboard description
+        private const val COLUMN_FOLDER_ID = "FOLDER_ID" // null if not in a folder
+        private const val FOLDER_TABLE = "FOLDER"
+        private const val COLUMN_NAME = "NAME"
+        const val MAX_FOLDER_NAME_LENGTH = 40
         const val CREATE_TABLE = """
             CREATE TABLE $TABLE (
                 $COLUMN_ID INTEGER PRIMARY KEY,
@@ -268,6 +291,8 @@ class ClipboardDao private constructor(private val db: Database) {
 
         const val ADD_FILE_COLUMN = "ALTER TABLE $TABLE ADD COLUMN $COLUMN_FILE TEXT"
         const val ADD_MIME_TYPE_COLUMN = "ALTER TABLE $TABLE ADD COLUMN $COLUMN_MIME_TYPE TEXT"
+        const val CREATE_FOLDER_TABLE = "CREATE TABLE $FOLDER_TABLE ($COLUMN_ID INTEGER PRIMARY KEY, $COLUMN_NAME TEXT NOT NULL)"
+        const val ADD_FOLDER_ID_COLUMN = "ALTER TABLE $TABLE ADD COLUMN $COLUMN_FOLDER_ID INTEGER"
 
         private var instance: ClipboardDao? = null
         lateinit var clipFilesDir: File
@@ -280,7 +305,6 @@ class ClipboardDao private constructor(private val db: Database) {
                     instance = ClipboardDao(Database.getInstance(context))
                     clipFilesDir = File(context.filesDir, "clipboard")
                     clipFilesDir.mkdirs()
-                    instance?.cleanupFiles(context.prefs())
                 } catch (e: Throwable) {
                     Log.e(TAG, "can't create ClipboardDao", e)
                 }

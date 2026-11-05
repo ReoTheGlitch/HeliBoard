@@ -4,6 +4,7 @@ package helium314.keyboard.latin.database
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
 import androidx.core.database.sqlite.transaction
 import helium314.keyboard.latin.utils.GestureDataDao
@@ -24,11 +25,15 @@ class Database private constructor(context: Context, name: String = NAME) : SQLi
             db.execSQL(ClipboardDao.ADD_FILE_COLUMN)
             db.execSQL(ClipboardDao.ADD_MIME_TYPE_COLUMN)
         }
+        if (oldVersion <= 3) {
+            db.execSQL(ClipboardDao.CREATE_FOLDER_TABLE)
+            db.execSQL(ClipboardDao.ADD_FOLDER_ID_COLUMN)
+        }
     }
 
     companion object {
         private val TAG = Database::class.java.simpleName
-        private const val VERSION = 3
+        private const val VERSION = 4
         const val NAME = "heliboard.db"
         private var instance: Database? = null
         fun getInstance(context: Context): Database {
@@ -50,18 +55,36 @@ class Database private constructor(context: Context, name: String = NAME) : SQLi
                     if (clipDao == null) {
                         Log.e(TAG, "can't transfer clipboard data because ClipboardDao is null")
                     } else {
-                        otherDb.readableDatabase.rawQuery("SELECT TIMESTAMP, PINNED, TEXT, FILE, MIME_TYPE FROM CLIPBOARD", null)
+                        // merge into the current history, nothing is removed: folders are matched by name,
+                        // and a clip is skipped if the same text (or file) is already in the history
+                        val knownTexts = clipDao.getAll().mapNotNullTo(HashSet()) { it.text }
+                        val knownFiles = clipDao.getAll().mapNotNullTo(HashSet()) { it.filename }
+                        val folderIds = HashMap<Long, Long>() // folder id in the backup -> folder id here
+                        otherDb.readableDatabase.rawQuery("SELECT ID, NAME FROM FOLDER", null).use {
+                            while (it.moveToNext()) {
+                                clipDao.getOrCreateFolder(it.getString(1))?.let { folder -> folderIds[it.getLong(0)] = folder.id }
+                            }
+                        }
+                        otherDb.readableDatabase.rawQuery("SELECT TIMESTAMP, PINNED, TEXT, FILE, MIME_TYPE, FOLDER_ID FROM CLIPBOARD", null)
                             .use {
-                                clipDao.clear()
                                 while (it.moveToNext()) {
-                                    clipDao.insertNewEntry(
-                                        it.getLong(0),
-                                        it.getInt(1) != 0,
-                                        it.getStringOrNull(2),
-                                        it.getStringOrNull(3),
-                                        it.getStringOrNull(4)?.split("§"),
-                                        null
-                                    )
+                                    val text = it.getStringOrNull(2)
+                                    val file = it.getStringOrNull(3)
+                                    val duplicate = (text != null && text in knownTexts) || (file != null && file in knownFiles)
+                                    if (!duplicate) {
+                                        val folderId = it.getLongOrNull(5)?.let { backupId -> folderIds[backupId] }
+                                        clipDao.insertNewEntry(
+                                            it.getLong(0),
+                                            it.getInt(1) != 0,
+                                            text,
+                                            file,
+                                            it.getStringOrNull(4)?.split("§"),
+                                            null,
+                                            folderId
+                                        )
+                                        text?.let { knownTexts.add(it) }
+                                        file?.let { knownFiles.add(it) }
+                                    }
                                 }
                             }
                     }

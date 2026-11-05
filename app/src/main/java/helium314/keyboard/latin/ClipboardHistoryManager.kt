@@ -27,6 +27,7 @@ import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.common.isValidNumber
 import helium314.keyboard.latin.database.ClipboardDao
+import helium314.keyboard.latin.database.ClipboardFolder
 import helium314.keyboard.latin.databinding.ClipboardSuggestionBinding
 import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
@@ -142,17 +143,36 @@ class ClipboardHistoryManager(
         clipboardDao?.togglePinned(id)
     }
 
+    fun setClipsPinned(ids: Collection<Long>, pinned: Boolean) {
+        clipboardDao?.setPinned(ids, pinned)
+    }
+
+    /** puts the text on the system clipboard, like a copy from any app */
+    fun copyTextToClipboard(text: String) {
+        clipboardManager.setPrimaryClip(ClipData.newPlainText("", text))
+    }
+
     fun clearHistory() {
         clipboardDao?.clearNonPinned()
         ClipboardManagerCompat.clearPrimaryClip(clipboardManager)
         removeClipboardSuggestion()
     }
 
-    fun canRemove(index: Int) = clipboardDao?.isPinned(index) == false
+    // pinned clips are not removed
+    fun removeEntry(id: Long) {
+        clipboardDao?.deleteClipById(id)
+    }
 
-    fun removeEntry(index: Int) {
-        if (canRemove(index))
-            clipboardDao?.deleteClipAt(index)
+    fun getAllEntries(): List<ClipboardHistoryEntry> = clipboardDao?.getAll() ?: emptyList()
+
+    fun getFolders(): List<ClipboardFolder> = clipboardDao?.getFolders() ?: emptyList()
+
+    fun createFolder(name: String): ClipboardFolder? = clipboardDao?.createFolder(name)
+
+    fun renameFolder(id: Long, name: String): Boolean = clipboardDao?.renameFolder(id, name) == true
+
+    fun moveClipsToFolder(ids: Collection<Long>, folderId: Long?) {
+        clipboardDao?.moveClipsToFolder(ids, folderId)
     }
 
     fun sortHistoryEntries() {
@@ -281,7 +301,8 @@ class ClipboardHistoryManager(
                 context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null).use {
                     if (it?.moveToFirst() != true) return false
                     val size = it.getLong(0)
-                    return size <= maxSize * 1000000 // maxSize is megabytes
+                    // maxSize is megabytes per file, above 1000 means no limit. Files are never removed later.
+                    return maxSize > 1000 || size <= maxSize * 1000000
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "error checking clip size", e) // happens with SecurityException: Permission Denial
