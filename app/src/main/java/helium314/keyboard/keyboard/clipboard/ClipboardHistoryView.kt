@@ -65,13 +65,14 @@ class ClipboardHistoryView @JvmOverloads constructor(
     lateinit var keyboardActionListener: KeyboardActionListener
     private lateinit var clipboardHistoryManager: ClipboardHistoryManager
 
-    // which clips are shown, and the text typed in the folder name input
+    // which clips are shown, and the text typed in the folder name or search input
     private var folderFilter: FolderFilter = FolderFilter.All
+    private var searchQuery: String? = null // not null while searching, then all folders are searched
     private var inputMode = InputMode.NONE
     private var renamingFolderId = 0L
     private val inputText = StringBuilder()
 
-    private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER }
+    private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER, SEARCH }
 
     init {
         val clipboardViewAttr = context.obtainStyledAttributes(attrs,
@@ -128,7 +129,14 @@ class ClipboardHistoryView @JvmOverloads constructor(
                 startInput(InputMode.RENAME_FOLDER, folder.name)
             }
             onConfirmInput = { confirmInput() }
-            onCancelInput = { stopInput() }
+            onCancelInput = {
+                if (inputMode == InputMode.SEARCH || (inputMode == InputMode.NONE && searchQuery != null)) clearSearch()
+                else stopInput()
+            }
+            onSearch = { startInput(InputMode.SEARCH, searchQuery.orEmpty()) }
+            onInputClick = {
+                if (inputMode == InputMode.NONE && searchQuery != null) startInput(InputMode.SEARCH, searchQuery.orEmpty())
+            }
         }
         val clipboardStrip = KeyboardSwitcher.getInstance().clipboardStrip!!
         getEnabledClipboardToolbarKeys(context.prefs()).forEach {
@@ -192,6 +200,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         folderBar.setStyle(keyBackgroundId, params.mTextColor, params.mTypeface, params.mLabelSize.toFloat())
         miniKeyboard.setStyle(keyBackgroundId, params.mTextColor, params.mTypeface, params.mLabelSize.toFloat(), clipboardLayoutParams.inputRowHeight)
         folderFilter = FolderFilter.All
+        searchQuery = null
         inputMode = InputMode.NONE
         inputText.clear()
 
@@ -230,6 +239,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         if (!this::clipboardAdapter.isInitialized) return
         inputMode = InputMode.NONE
         inputText.clear()
+        searchQuery = null
         clipboardRecyclerView.adapter = null
         clipboardHistoryManager.setHistoryChangeListener(null)
         clipboardAdapter.clipboardHistoryManager = null
@@ -292,9 +302,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
         }
     }
 
-    /** rebuilds the shown clips from the history, with the folder filter applied */
+    /** rebuilds the shown clips from the history. While searching, all folders are searched. */
     private fun refreshList(scrollToId: Long? = null, animate: Boolean = true) {
-        val visible = ClipboardListFilter.visible(clipboardHistoryManager.getAllEntries(), folderFilter, null)
+        val query = searchQuery
+        val folder = if (query != null) FolderFilter.All else folderFilter
+        val visible = ClipboardListFilter.visible(clipboardHistoryManager.getAllEntries(), folder, query)
         clipboardAdapter.submitItems(visible, animate)
         if (!animate) clipboardRecyclerView.scrollToPosition(0)
         val position = scrollToId?.let { clipboardAdapter.positionOf(it) } ?: -1
@@ -305,14 +317,20 @@ class ClipboardHistoryView @JvmOverloads constructor(
         folderBar.showChips(clipboardHistoryManager.getFolders(), folderFilter)
     }
 
-    /** shows either the folder chips or the folder name input, and sets the list height to match */
+    /**
+     * Shows the folder chips, or the text line while a name or search text is typed or a search is active,
+     * and sets the list height to match.
+     */
     private fun updateInputState() {
         val inputShown = inputMode != InputMode.NONE
-        if (inputShown) {
-            val text = inputText.toString()
-            folderBar.showInput(text, confirmEnabled = text.isNotBlank())
-        } else {
-            refreshFolderBar()
+        val text = if (inputShown) inputText.toString() else searchQuery.orEmpty()
+        when {
+            inputShown -> {
+                val hint = context.getString(if (inputMode == InputMode.SEARCH) R.string.clipboard_search_hint else R.string.clipboard_folder_name_hint)
+                folderBar.showInput(text, hint, showConfirm = inputMode != InputMode.SEARCH, confirmEnabled = text.isNotBlank())
+            }
+            searchQuery != null -> folderBar.showInput(text, context.getString(R.string.clipboard_search_hint), showConfirm = false, confirmEnabled = false)
+            else -> refreshFolderBar()
         }
         bottomRowKeyboard.isVisible = !inputShown
         miniKeyboard.isVisible = inputShown
@@ -323,6 +341,10 @@ class ClipboardHistoryView @JvmOverloads constructor(
         inputMode = mode
         inputText.setLength(0)
         inputText.append(initialText)
+        if (mode == InputMode.SEARCH) {
+            searchQuery = initialText
+            refreshList(animate = false)
+        }
         updateInputState()
     }
 
@@ -332,10 +354,23 @@ class ClipboardHistoryView @JvmOverloads constructor(
         updateInputState()
     }
 
+    /** ends the search, shows all clips of the selected folder again */
+    private fun clearSearch() {
+        inputMode = InputMode.NONE
+        inputText.setLength(0)
+        searchQuery = null
+        updateInputState()
+        refreshList(animate = false)
+    }
+
     private fun handleInputKey(key: String) {
         when (key) {
             ClipboardMiniKeyboard.BACKSPACE_KEY -> if (inputText.isNotEmpty()) inputText.deleteCharAt(inputText.length - 1)
             else -> if (inputText.length < ClipboardDao.MAX_FOLDER_NAME_LENGTH) inputText.append(key)
+        }
+        if (inputMode == InputMode.SEARCH) {
+            searchQuery = inputText.toString()
+            refreshList(animate = false)
         }
         updateInputState()
     }
@@ -345,7 +380,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         val saved = when (inputMode) {
             InputMode.NEW_FOLDER -> clipboardHistoryManager.createFolder(name)?.also { folderFilter = FolderFilter.Folder(it.id) } != null
             InputMode.RENAME_FOLDER -> clipboardHistoryManager.renameFolder(renamingFolderId, name)
-            InputMode.NONE -> false
+            InputMode.NONE, InputMode.SEARCH -> false
         }
         if (!saved) {
             Toast.makeText(context, R.string.clipboard_folder_name_invalid, Toast.LENGTH_SHORT).show()

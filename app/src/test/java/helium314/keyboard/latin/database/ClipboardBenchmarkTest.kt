@@ -2,6 +2,8 @@
 package helium314.keyboard.latin.database
 
 import android.content.Context
+import helium314.keyboard.keyboard.clipboard.ClipboardListFilter
+import helium314.keyboard.keyboard.clipboard.FolderFilter
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -43,14 +45,15 @@ class ClipboardBenchmarkTest {
             measureNanoTime { loaded.addClip(now + i, false, "fresh clip $i ${UUID.randomUUID()}") }.toMs()
         }
 
-        // in-memory substring filter over all text clips (this is what search will cost)
+        // search as the panel runs it: all folders, text clips only
         val entries = loaded.getAll()
         val queries = listOf("lorem", "item4217", "no-such-text")
         val searchMs = queries.associateWith { query ->
             List(SEARCH_RUNS) {
-                measureNanoTime { entries.count { it.text?.contains(query, ignoreCase = true) == true } }.toMs()
+                measureNanoTime { ClipboardListFilter.visible(entries, FolderFilter.All, query) }.toMs()
             }
         }
+        val hits = queries.associateWith { query -> ClipboardListFilter.visible(entries, FolderFilter.All, query).size }
 
         val report = buildString {
             appendLine("Clipboard benchmark (JVM + Robolectric, not on-device)")
@@ -59,7 +62,7 @@ class ClipboardBenchmarkTest {
             appendLine("cold load of DAO (median of $LOAD_RUNS): ${"%.2f".format(median(loadMs))} ms")
             appendLine("add one clip (median of $ADD_RUNS): ${"%.3f".format(median(addMs))} ms")
             searchMs.forEach { (query, times) ->
-                appendLine("in-memory filter, query \"$query\" (median of $SEARCH_RUNS): ${"%.3f".format(median(times))} ms")
+                appendLine("search \"$query\" (median of $SEARCH_RUNS): ${"%.3f".format(median(times))} ms, ${hits[query]} hits")
             }
         }
         println(report)

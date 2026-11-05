@@ -28,6 +28,8 @@ class ClipboardFolderBar @JvmOverloads constructor(
     var onRenameFolder: ((ClipboardFolder) -> Unit)? = null
     var onConfirmInput: (() -> Unit)? = null
     var onCancelInput: (() -> Unit)? = null
+    var onSearch: (() -> Unit)? = null
+    var onInputClick: (() -> Unit)? = null
 
     private var keyBackgroundId = 0
     private var textColor = 0
@@ -38,10 +40,14 @@ class ClipboardFolderBar @JvmOverloads constructor(
 
     private val chipScroll = HorizontalScrollView(context)
     private val chipRow = LinearLayout(context).apply { orientation = HORIZONTAL }
+    private val searchButton = keyText(context.getString(R.string.clipboard_search)).apply {
+        setOnClickListener { onSearch?.invoke() }
+    }
     private val inputLabel = TextView(context).apply {
         gravity = Gravity.CENTER_VERTICAL
         setSingleLine(true)
         isGone = true
+        setOnClickListener { onInputClick?.invoke() }
     }
     private val confirmButton = keyText("✓").apply { isGone = true; setOnClickListener { onConfirmInput?.invoke() } }
     private val cancelButton = keyText("✕").apply { isGone = true; setOnClickListener { onCancelInput?.invoke() } }
@@ -50,6 +56,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         orientation = HORIZONTAL
         chipScroll.addView(chipRow)
         addView(chipScroll, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        addView(searchButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(inputLabel, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(confirmButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(cancelButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
@@ -63,7 +70,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         inputLabel.setTextColor(textColor)
         inputLabel.typeface = typeface
         inputLabel.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
-        listOf(confirmButton, cancelButton).forEach {
+        listOf(searchButton, confirmButton, cancelButton).forEach {
             it.setTextColor(textColor)
             it.typeface = typeface
             it.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
@@ -74,6 +81,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
     /** shows the folder chips. [selected] is highlighted. */
     fun showChips(folders: List<ClipboardFolder>, selected: FolderFilter) {
         chipScroll.isVisible = true
+        searchButton.isVisible = true
         inputLabel.isGone = true
         confirmButton.isGone = true
         cancelButton.isGone = true
@@ -99,13 +107,17 @@ class ClipboardFolderBar @JvmOverloads constructor(
         })
     }
 
-    /** shows the text field line with [text] while a name is typed */
-    fun showInput(text: String, confirmEnabled: Boolean) {
+    /**
+     * shows the text line with [text] instead of the chips. [hint] is shown when [text] is empty.
+     * [showConfirm] adds the confirm button, [confirmEnabled] tells whether it can be used.
+     */
+    fun showInput(text: String, hint: String, showConfirm: Boolean, confirmEnabled: Boolean) {
         chipScroll.isGone = true
-        inputLabel.text = text.ifEmpty { context.getString(R.string.clipboard_folder_name_hint) }
+        searchButton.isGone = true
+        inputLabel.text = text.ifEmpty { hint }
         inputLabel.alpha = if (text.isEmpty()) 0.5f else 1f
         inputLabel.isVisible = true
-        confirmButton.isVisible = true
+        confirmButton.isVisible = showConfirm
         confirmButton.alpha = if (confirmEnabled) 1f else 0.4f
         cancelButton.isVisible = true
     }
