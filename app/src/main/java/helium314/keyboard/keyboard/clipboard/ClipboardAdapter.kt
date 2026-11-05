@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import helium314.keyboard.latin.ClipboardHistoryEntry
 import helium314.keyboard.latin.ClipboardHistoryManager
@@ -25,6 +26,9 @@ class ClipboardAdapter(
 
     var clipboardHistoryManager: ClipboardHistoryManager? = null
 
+    // the entries currently shown (after folder and search filter), positions refer to this list
+    private var items: List<ClipboardHistoryEntry> = emptyList()
+
     var pinnedIconResId = 0
     var itemBackgroundId = 0
     var itemTypeFace: Typeface? = null
@@ -38,12 +42,50 @@ class ClipboardAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.setContent(getItem(position))
+        holder.setContent(entryAt(position))
     }
 
-    private fun getItem(position: Int) = clipboardHistoryManager?.getHistoryEntry(position)
+    override fun getItemCount() = items.size
 
-    override fun getItemCount() = clipboardHistoryManager?.getHistorySize() ?: 0
+    fun entryAt(position: Int): ClipboardHistoryEntry? = items.getOrNull(position)
+
+    fun positionOf(id: Long): Int = items.indexOfFirst { it.id == id }
+
+    /**
+     * Replaces the shown entries.
+     * With [animate] the change is computed with DiffUtil, which is fast when only a few clips changed.
+     * Without it (filter or folder changed) the list is simply reloaded.
+     */
+    fun submitItems(newItems: List<ClipboardHistoryEntry>, animate: Boolean) {
+        val oldItems = items
+        if (!animate) {
+            items = newItems
+            notifyDataSetChanged()
+            return
+        }
+        val result = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldItems.size
+            override fun getNewListSize() = newItems.size
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int) =
+                oldItems[oldItemPosition].id == newItems[newItemPosition].id
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                val old = oldItems[oldItemPosition]
+                val new = newItems[newItemPosition]
+                return old.isPinned == new.isPinned && old.timeStamp == new.timeStamp && old.folderId == new.folderId && old.text == new.text
+            }
+        })
+        items = newItems
+        result.dispatchUpdatesTo(this)
+    }
+
+    /** removes a clip from history and from the shown list, pinned clips are kept */
+    fun removeEntryAt(position: Int) {
+        val entry = items.getOrNull(position) ?: return
+        if (entry.isPinned) return
+        clipboardHistoryManager?.removeEntry(entry.id)
+        items = items.toMutableList().apply { this.removeAt(position) }
+        notifyItemRemoved(position)
+    }
 
     inner class ViewHolder(
             view: View

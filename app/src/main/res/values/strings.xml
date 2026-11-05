@@ -210,6 +210,16 @@
     <string name="enable_clipboard_history_summary">If disabled, clipboard key will paste clipboard content if any</string>
     <!-- Preferences item for controlling clipboard history retention time -->
     <string name="clipboard_history_retention_time">History retention time</string>
+    <!-- Clipboard panel: folder chip that shows all clips -->
+    <string name="clipboard_folder_all">All</string>
+    <!-- Clipboard panel: folder chip that shows clips which are not in a folder -->
+    <string name="clipboard_folder_unfiled">Unfiled</string>
+    <!-- Clipboard panel: content description of the button that creates a folder -->
+    <string name="clipboard_folder_new">New folder</string>
+    <!-- Clipboard panel: placeholder while typing a folder name -->
+    <string name="clipboard_folder_name_hint">Folder name</string>
+    <!-- Clipboard panel: shown when a folder name is empty or already used -->
+    <string name="clipboard_folder_name_invalid">Folder name is empty or already exists</string>
     <!-- Preferences item for showing pinned clipboard items first -->
     <string name="clipboard_history_pinned_first">Show pinned items on top</string>
     <!-- Preferences item for extending the clipboard history to files (images or others) -->

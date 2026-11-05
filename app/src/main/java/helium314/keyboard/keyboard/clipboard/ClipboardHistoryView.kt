@@ -12,6 +12,8 @@ import android.view.inputmethod.EditorInfo
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import helium314.keyboard.event.HapticEvent
 import helium314.keyboard.keyboard.KeyboardActionListener
@@ -56,9 +58,20 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private lateinit var placeholderView: TextView
     private val toolbarKeys = mutableListOf<ImageButton>()
     private lateinit var clipboardAdapter: ClipboardAdapter
+    private lateinit var folderBar: ClipboardFolderBar
+    private lateinit var miniKeyboard: ClipboardMiniKeyboard
+    private lateinit var bottomRowKeyboard: MainKeyboardView
 
     lateinit var keyboardActionListener: KeyboardActionListener
     private lateinit var clipboardHistoryManager: ClipboardHistoryManager
+
+    // which clips are shown, and the text typed in the folder name input
+    private var folderFilter: FolderFilter = FolderFilter.All
+    private var inputMode = InputMode.NONE
+    private var renamingFolderId = 0L
+    private val inputText = StringBuilder()
+
+    private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER }
 
     init {
         val clipboardViewAttr = context.obtainStyledAttributes(attrs,
@@ -98,6 +111,25 @@ class ClipboardHistoryView @JvmOverloads constructor(
             clipboardLayoutParams.setListProperties(this)
             placeholderView = this@ClipboardHistoryView.placeholderView
         }
+        bottomRowKeyboard = findViewById(R.id.bottom_row_keyboard)
+        miniKeyboard = findViewById<ClipboardMiniKeyboard>(R.id.clipboard_mini_keyboard).apply {
+            onKey = { handleInputKey(it) }
+        }
+        folderBar = findViewById<ClipboardFolderBar>(R.id.clipboard_folder_bar).apply {
+            layoutParams.height = clipboardLayoutParams.headerHeight
+            onFilterSelected = { filter ->
+                folderFilter = filter
+                refreshFolderBar()
+                refreshList(animate = false)
+            }
+            onNewFolder = { startInput(InputMode.NEW_FOLDER, "") }
+            onRenameFolder = { folder ->
+                renamingFolderId = folder.id
+                startInput(InputMode.RENAME_FOLDER, folder.name)
+            }
+            onConfirmInput = { confirmInput() }
+            onCancelInput = { stopInput() }
+        }
         val clipboardStrip = KeyboardSwitcher.getInstance().clipboardStrip!!
         getEnabledClipboardToolbarKeys(context.prefs()).forEach {
             val key = createToolbarKey(context, it)
@@ -126,12 +158,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
     }
 
     private fun setupBottomRowKeyboard(editorInfo: EditorInfo, listener: KeyboardActionListener) {
-        val keyboardView = findViewById<MainKeyboardView>(R.id.bottom_row_keyboard)
-        keyboardView.setKeyboardActionListener(listener)
-        PointerTracker.switchTo(keyboardView)
+        bottomRowKeyboard.setKeyboardActionListener(listener)
+        PointerTracker.switchTo(bottomRowKeyboard)
         val kls = KeyboardLayoutSet.Builder.buildEmojiClipBottomRow(context, editorInfo)
         val keyboard = kls.getKeyboard(KeyboardElement.CLIPBOARD_BOTTOM_ROW)
-        keyboardView.setKeyboard(keyboard)
+        bottomRowKeyboard.setKeyboard(keyboard)
     }
 
     fun setHardwareAcceleratedDrawingEnabled(enabled: Boolean) {
@@ -158,6 +189,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
         KeyboardTypeface.customTypeface()?.let { params.mTypeface = it }
         setupClipKey(params)
         setupBottomRowKeyboard(editorInfo, keyboardActionListener)
+        folderBar.setStyle(keyBackgroundId, params.mTextColor, params.mTypeface, params.mLabelSize.toFloat())
+        miniKeyboard.setStyle(keyBackgroundId, params.mTextColor, params.mTypeface, params.mLabelSize.toFloat(), clipboardLayoutParams.inputRowHeight)
+        folderFilter = FolderFilter.All
+        inputMode = InputMode.NONE
+        inputText.clear()
 
         placeholderView.apply {
             KeyboardTypeface.applyToTextView(this)
@@ -183,6 +219,8 @@ class ClipboardHistoryView @JvmOverloads constructor(
             keyboardAttr.recycle()
             setPadding(leftPadding, paddingTop, rightPadding, paddingBottom)
         }
+        updateInputState()
+        refreshList(animate = false)
 
         // absurd workaround so Android sets the correct color from stateList (depending on "activated")
         toolbarKeys.forEach { it.isEnabled = false; it.isEnabled = true }
@@ -190,6 +228,8 @@ class ClipboardHistoryView @JvmOverloads constructor(
 
     fun stopClipboardHistory() {
         if (!this::clipboardAdapter.isInitialized) return
+        inputMode = InputMode.NONE
+        inputText.clear()
         clipboardRecyclerView.adapter = null
         clipboardHistoryManager.setHistoryChangeListener(null)
         clipboardAdapter.clipboardHistoryManager = null
@@ -226,19 +266,18 @@ class ClipboardHistoryView @JvmOverloads constructor(
             keyboardActionListener.onCodeInput(KeyCode.ALPHA, Constants.NOT_A_COORDINATE, Constants.NOT_A_COORDINATE, false)
     }
 
+    // positions from the DAO refer to all clips, so the shown list is rebuilt from the DAO
     override fun onClipInserted(position: Int) {
-        clipboardAdapter.notifyItemInserted(position)
-        clipboardRecyclerView.smoothScrollToPosition(position)
+        refreshList(scrollToId = clipboardHistoryManager.getHistoryEntry(position)?.id)
     }
 
     override fun onClipsRemoved(position: Int, count: Int) {
-        clipboardAdapter.notifyItemRangeRemoved(position, count)
+        refreshList()
     }
 
     override fun onClipMoved(oldPosition: Int, newPosition: Int) {
-        clipboardAdapter.notifyItemMoved(oldPosition, newPosition)
-        clipboardAdapter.notifyItemChanged(newPosition)
-        if (newPosition < oldPosition) clipboardRecyclerView.smoothScrollToPosition(newPosition)
+        val movedId = clipboardHistoryManager.getHistoryEntry(newPosition)?.id
+        refreshList(scrollToId = if (newPosition < oldPosition) movedId else null)
     }
 
     override fun onSharedPreferenceChanged(prefs: SharedPreferences?, key: String?) {
@@ -249,7 +288,70 @@ class ClipboardHistoryView @JvmOverloads constructor(
             // Ensure settings are reloaded first
             Settings.getInstance().onSharedPreferenceChanged(prefs, key)
             clipboardHistoryManager.sortHistoryEntries()
-            clipboardAdapter.notifyDataSetChanged()
+            refreshList(animate = false)
         }
+    }
+
+    /** rebuilds the shown clips from the history, with the folder filter applied */
+    private fun refreshList(scrollToId: Long? = null, animate: Boolean = true) {
+        val visible = ClipboardListFilter.visible(clipboardHistoryManager.getAllEntries(), folderFilter, null)
+        clipboardAdapter.submitItems(visible, animate)
+        if (!animate) clipboardRecyclerView.scrollToPosition(0)
+        val position = scrollToId?.let { clipboardAdapter.positionOf(it) } ?: -1
+        if (position >= 0) clipboardRecyclerView.smoothScrollToPosition(position)
+    }
+
+    private fun refreshFolderBar() {
+        folderBar.showChips(clipboardHistoryManager.getFolders(), folderFilter)
+    }
+
+    /** shows either the folder chips or the folder name input, and sets the list height to match */
+    private fun updateInputState() {
+        val inputShown = inputMode != InputMode.NONE
+        if (inputShown) {
+            val text = inputText.toString()
+            folderBar.showInput(text, confirmEnabled = text.isNotBlank())
+        } else {
+            refreshFolderBar()
+        }
+        bottomRowKeyboard.isVisible = !inputShown
+        miniKeyboard.isVisible = inputShown
+        clipboardLayoutParams.setListProperties(clipboardRecyclerView, inputShown)
+    }
+
+    private fun startInput(mode: InputMode, initialText: String) {
+        inputMode = mode
+        inputText.setLength(0)
+        inputText.append(initialText)
+        updateInputState()
+    }
+
+    private fun stopInput() {
+        inputMode = InputMode.NONE
+        inputText.setLength(0)
+        updateInputState()
+    }
+
+    private fun handleInputKey(key: String) {
+        when (key) {
+            ClipboardMiniKeyboard.BACKSPACE_KEY -> if (inputText.isNotEmpty()) inputText.deleteCharAt(inputText.length - 1)
+            else -> if (inputText.length < ClipboardDao.MAX_FOLDER_NAME_LENGTH) inputText.append(key)
+        }
+        updateInputState()
+    }
+
+    private fun confirmInput() {
+        val name = inputText.toString()
+        val saved = when (inputMode) {
+            InputMode.NEW_FOLDER -> clipboardHistoryManager.createFolder(name)?.also { folderFilter = FolderFilter.Folder(it.id) } != null
+            InputMode.RENAME_FOLDER -> clipboardHistoryManager.renameFolder(renamingFolderId, name)
+            InputMode.NONE -> false
+        }
+        if (!saved) {
+            Toast.makeText(context, R.string.clipboard_folder_name_invalid, Toast.LENGTH_SHORT).show()
+            return
+        }
+        stopInput()
+        refreshList(animate = false)
     }
 }
