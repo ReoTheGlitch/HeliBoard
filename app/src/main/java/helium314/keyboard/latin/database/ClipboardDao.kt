@@ -169,6 +169,24 @@ class ClipboardDao private constructor(private val db: Database) {
 
     fun sort() = cache.sort()
 
+    /** pins or unpins the given clips, like [togglePinned] they move to the top of their group. Only these rows are written. */
+    fun setPinned(ids: Collection<Long>, pinned: Boolean) = synchronized(this) {
+        val idSet = ids.toHashSet()
+        val entries = cache.filter { it.id in idSet && it.isPinned != pinned }
+        if (entries.isEmpty()) return@synchronized
+        val now = System.currentTimeMillis()
+        entries.forEach {
+            it.isPinned = pinned
+            it.timeStamp = now
+        }
+        cache.sort()
+        val cv = ContentValues(2).apply {
+            put(COLUMN_PINNED, pinned)
+            put(COLUMN_TIMESTAMP, now)
+        }
+        db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
+    }
+
     fun togglePinned(id: Long) = synchronized(this) {
         val entry = cache.first { it.id == id }
         entry.isPinned = !entry.isPinned

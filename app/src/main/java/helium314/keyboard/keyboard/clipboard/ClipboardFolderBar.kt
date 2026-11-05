@@ -30,6 +30,12 @@ class ClipboardFolderBar @JvmOverloads constructor(
     var onCancelInput: (() -> Unit)? = null
     var onSearch: (() -> Unit)? = null
     var onInputClick: (() -> Unit)? = null
+    var onSelectionPin: (() -> Unit)? = null
+    var onSelectionMove: (() -> Unit)? = null
+    var onSelectionCopy: (() -> Unit)? = null
+    var onSelectionCancel: (() -> Unit)? = null
+    /** called with the folder to move the selected clips to, null for no folder */
+    var onMoveTarget: ((Long?) -> Unit)? = null
 
     private var keyBackgroundId = 0
     private var textColor = 0
@@ -52,6 +58,16 @@ class ClipboardFolderBar @JvmOverloads constructor(
     private val confirmButton = keyText("✓").apply { isGone = true; setOnClickListener { onConfirmInput?.invoke() } }
     private val cancelButton = keyText("✕").apply { isGone = true; setOnClickListener { onCancelInput?.invoke() } }
 
+    private val selectionRow = LinearLayout(context).apply { orientation = HORIZONTAL; isGone = true }
+    private val selectionCount = TextView(context).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        setSingleLine(true)
+    }
+    private val pinButton = keyText(context.getString(R.string.clipboard_selection_pin)).apply { setOnClickListener { onSelectionPin?.invoke() } }
+    private val moveButton = keyText(context.getString(R.string.clipboard_selection_move)).apply { setOnClickListener { onSelectionMove?.invoke() } }
+    private val copyButton = keyText(context.getString(R.string.clipboard_selection_copy)).apply { setOnClickListener { onSelectionCopy?.invoke() } }
+    private val closeSelectionButton = keyText("✕").apply { setOnClickListener { onSelectionCancel?.invoke() } }
+
     init {
         orientation = HORIZONTAL
         chipScroll.addView(chipRow)
@@ -60,6 +76,11 @@ class ClipboardFolderBar @JvmOverloads constructor(
         addView(inputLabel, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(confirmButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(cancelButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        selectionRow.addView(selectionCount, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        listOf(pinButton, moveButton, copyButton, closeSelectionButton).forEach {
+            selectionRow.addView(it, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        }
+        addView(selectionRow, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
     }
 
     fun setStyle(keyBackgroundId: Int, textColor: Int, typeface: Typeface?, textSize: Float) {
@@ -70,7 +91,10 @@ class ClipboardFolderBar @JvmOverloads constructor(
         inputLabel.setTextColor(textColor)
         inputLabel.typeface = typeface
         inputLabel.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
-        listOf(searchButton, confirmButton, cancelButton).forEach {
+        selectionCount.setTextColor(textColor)
+        selectionCount.typeface = typeface
+        selectionCount.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
+        listOf(searchButton, confirmButton, cancelButton, pinButton, moveButton, copyButton, closeSelectionButton).forEach {
             it.setTextColor(textColor)
             it.typeface = typeface
             it.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
@@ -85,6 +109,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         inputLabel.isGone = true
         confirmButton.isGone = true
         cancelButton.isGone = true
+        selectionRow.isGone = true
         chipRow.removeAllViews()
         chipRow.addView(chip(context.getString(R.string.clipboard_folder_all), selected == FolderFilter.All) {
             onFilterSelected?.invoke(FolderFilter.All)
@@ -114,12 +139,40 @@ class ClipboardFolderBar @JvmOverloads constructor(
     fun showInput(text: String, hint: String, showConfirm: Boolean, confirmEnabled: Boolean) {
         chipScroll.isGone = true
         searchButton.isGone = true
+        selectionRow.isGone = true
         inputLabel.text = text.ifEmpty { hint }
         inputLabel.alpha = if (text.isEmpty()) 0.5f else 1f
         inputLabel.isVisible = true
         confirmButton.isVisible = showConfirm
         confirmButton.alpha = if (confirmEnabled) 1f else 0.4f
         cancelButton.isVisible = true
+    }
+
+    /** shows the selection actions instead of the chips */
+    fun showSelection(count: Int) {
+        chipScroll.isGone = true
+        searchButton.isGone = true
+        inputLabel.isGone = true
+        confirmButton.isGone = true
+        cancelButton.isGone = true
+        selectionRow.isVisible = true
+        selectionCount.text = context.getString(R.string.clipboard_selected_count, count)
+        listOf(pinButton, moveButton, copyButton).forEach { it.alpha = if (count > 0) 1f else 0.4f }
+    }
+
+    /** shows the folders as targets for moving the selected clips, with a cancel button */
+    fun showMoveTargets(folders: List<ClipboardFolder>) {
+        chipScroll.isVisible = true
+        searchButton.isGone = true
+        inputLabel.isGone = true
+        confirmButton.isGone = true
+        cancelButton.isVisible = true
+        selectionRow.isGone = true
+        chipRow.removeAllViews()
+        chipRow.addView(chip(context.getString(R.string.clipboard_selection_no_folder), false) { onMoveTarget?.invoke(null) })
+        folders.forEach { folder ->
+            chipRow.addView(chip(folder.name, false) { onMoveTarget?.invoke(folder.id) })
+        }
     }
 
     private fun chip(label: String, selected: Boolean, onClick: () -> Unit): TextView =

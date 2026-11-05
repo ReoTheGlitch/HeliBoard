@@ -72,6 +72,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private var renamingFolderId = 0L
     private val inputText = StringBuilder()
 
+    // multi-select: long-press starts it, a tap toggles a clip, then pin, move or copy all the selected clips
+    private var selectionActive = false
+    private var moveTargetMode = false // selecting the folder to move the selected clips to
+    private val selectedIds = mutableSetOf<Long>()
+
     private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER, SEARCH }
 
     init {
@@ -130,14 +135,25 @@ class ClipboardHistoryView @JvmOverloads constructor(
             }
             onConfirmInput = { confirmInput() }
             onCancelInput = {
-                if (inputMode == InputMode.SEARCH || (inputMode == InputMode.NONE && searchQuery != null)) clearSearch()
-                else stopInput()
+                when {
+                    selectionActive && moveTargetMode -> { moveTargetMode = false; updateSelectionUi() }
+                    selectionActive -> endSelection()
+                    inputMode == InputMode.SEARCH || (inputMode == InputMode.NONE && searchQuery != null) -> clearSearch()
+                    else -> stopInput()
+                }
             }
             onSearch = { startInput(InputMode.SEARCH, searchQuery.orEmpty()) }
             onInputClick = {
                 if (inputMode == InputMode.NONE && searchQuery != null) startInput(InputMode.SEARCH, searchQuery.orEmpty())
             }
+            onSelectionPin = { pinSelection() }
+            onSelectionMove = { moveTargetMode = true; updateSelectionUi() }
+            onSelectionCopy = { copySelection() }
+            onSelectionCancel = { endSelection() }
+            onMoveTarget = { moveSelectionTo(it) }
         }
+        clipboardAdapter.onSelectionStart = { startSelection(it) }
+        clipboardAdapter.onSelectionToggle = { toggleSelection(it) }
         val clipboardStrip = KeyboardSwitcher.getInstance().clipboardStrip!!
         getEnabledClipboardToolbarKeys(context.prefs()).forEach {
             val key = createToolbarKey(context, it)
@@ -203,6 +219,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
         searchQuery = null
         inputMode = InputMode.NONE
         inputText.clear()
+        selectionActive = false
+        moveTargetMode = false
+        selectedIds.clear()
 
         placeholderView.apply {
             KeyboardTypeface.applyToTextView(this)
@@ -240,6 +259,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
         inputMode = InputMode.NONE
         inputText.clear()
         searchQuery = null
+        selectionActive = false
+        moveTargetMode = false
+        selectedIds.clear()
         clipboardRecyclerView.adapter = null
         clipboardHistoryManager.setHistoryChangeListener(null)
         clipboardAdapter.clipboardHistoryManager = null
@@ -325,6 +347,10 @@ class ClipboardHistoryView @JvmOverloads constructor(
         val inputShown = inputMode != InputMode.NONE
         val text = if (inputShown) inputText.toString() else searchQuery.orEmpty()
         when {
+            selectionActive -> {
+                if (moveTargetMode) folderBar.showMoveTargets(clipboardHistoryManager.getFolders())
+                else folderBar.showSelection(selectedIds.size)
+            }
             inputShown -> {
                 val hint = context.getString(if (inputMode == InputMode.SEARCH) R.string.clipboard_search_hint else R.string.clipboard_folder_name_hint)
                 folderBar.showInput(text, hint, showConfirm = inputMode != InputMode.SEARCH, confirmEnabled = text.isNotBlank())
@@ -360,6 +386,56 @@ class ClipboardHistoryView @JvmOverloads constructor(
         inputText.setLength(0)
         searchQuery = null
         updateInputState()
+        refreshList(animate = false)
+    }
+
+    private fun startSelection(id: Long) {
+        if (inputMode != InputMode.NONE) stopInput() // a search text stays active, the keyboard closes
+        selectionActive = true
+        moveTargetMode = false
+        selectedIds.clear()
+        selectedIds.add(id)
+        updateSelectionUi()
+    }
+
+    private fun toggleSelection(id: Long) {
+        if (!selectedIds.add(id)) selectedIds.remove(id)
+        updateSelectionUi()
+    }
+
+    private fun endSelection() {
+        selectionActive = false
+        moveTargetMode = false
+        selectedIds.clear()
+        updateSelectionUi()
+    }
+
+    private fun updateSelectionUi() {
+        clipboardAdapter.setSelection(selectionActive, selectedIds)
+        updateInputState()
+    }
+
+    /** pins all selected clips, or unpins them if all of them are pinned already */
+    private fun pinSelection() {
+        val selected = clipboardHistoryManager.getAllEntries().filter { it.id in selectedIds }
+        if (selected.isEmpty()) return
+        clipboardHistoryManager.setClipsPinned(selected.map { it.id }, pinned = selected.any { !it.isPinned })
+        endSelection()
+        refreshList(animate = false)
+    }
+
+    /** copies the text of the selected text clips, one clip per line, in the order shown */
+    private fun copySelection() {
+        val text = ClipboardListFilter.textToCopy(clipboardAdapter.entriesInOrder(selectedIds))
+        if (text.isEmpty()) return
+        clipboardHistoryManager.copyTextToClipboard(text)
+        Toast.makeText(context, R.string.toast_msg_clipboard_copy, Toast.LENGTH_SHORT).show()
+        endSelection()
+    }
+
+    private fun moveSelectionTo(folderId: Long?) {
+        clipboardHistoryManager.moveClipsToFolder(selectedIds.toList(), folderId)
+        endSelection()
         refreshList(animate = false)
     }
 

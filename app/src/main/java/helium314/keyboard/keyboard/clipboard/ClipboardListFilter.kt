@@ -26,4 +26,8 @@ object ClipboardListFilter {
         }
         return all.filter { it.text?.contains(searchText, ignoreCase = true) == true }
     }
+
+    /** the text of the clips, one per line. Image clips have no text and are left out. */
+    fun textToCopy(entries: List<ClipboardHistoryEntry>): String =
+        entries.mapNotNull { it.text }.joinToString("\n")
 }

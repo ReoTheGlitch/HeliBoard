@@ -224,6 +224,16 @@
     <string name="clipboard_search">Search</string>
     <!-- Clipboard panel: placeholder in the search line while nothing is typed -->
     <string name="clipboard_search_hint">Search clips</string>
+    <!-- Clipboard panel: number of selected clips -->
+    <string name="clipboard_selected_count">%d selected</string>
+    <!-- Clipboard panel: action for the selected clips, pins them (or unpins them if all are pinned) -->
+    <string name="clipboard_selection_pin">Pin</string>
+    <!-- Clipboard panel: action for the selected clips, then choose the folder to move them to -->
+    <string name="clipboard_selection_move">Move</string>
+    <!-- Clipboard panel: action for the selected clips, copies their text joined with new lines -->
+    <string name="clipboard_selection_copy">Copy all</string>
+    <!-- Clipboard panel: folder choice when moving clips, moves them out of their folder -->
+    <string name="clipboard_selection_no_folder">No folder</string>
     <!-- Preferences item for showing pinned clipboard items first -->
     <string name="clipboard_history_pinned_first">Show pinned items on top</string>
     <!-- Preferences item for extending the clipboard history to files (images or others) -->
@@ -869,7 +879,7 @@ New dictionary:
 \n► Hold shift or symbol key, press one or more keys, and then release shift or symbol key to return to the previous keyboard. &lt;br&gt; &lt;br&gt;
 \n► Long-press a suggestion in the suggestion strip to show more suggestions, and a delete button to remove this suggestion. &lt;br&gt; &lt;br&gt;
 \n► Swipe up from a suggestion to open more suggestions, and release on the suggestion to select it. &lt;br&gt; &lt;br&gt;
-\n► Long-press an entry in the clipboard history to pin it (keep it in clipboard until you unpin). &lt;br&gt; &lt;br&gt;
+\n► Long-press an entry in the clipboard history to select entries, then pin, move to a folder or copy all of them (keep pinned entries until you unpin). &lt;br&gt; &lt;br&gt;
 \n► Swipe left in clipboard view to remove an entry (except when it\'s pinned) &lt;br&gt; &lt;br&gt;
 \n► Select text and press shift to switch between uppercase, lowercase and capitalize words. &lt;br&gt; &lt;br&gt;
 \n► You can add dictionaries by opening them in a file explorer: &lt;br&gt;

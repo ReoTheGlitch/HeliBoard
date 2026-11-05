@@ -45,6 +45,11 @@ class ClipboardListFilterTest {
     }
 
     @Test
+    fun copyTextJoinsTextClipsWithNewLines() {
+        assertEquals("Hello world\nWork note\nhello again", ClipboardListFilter.textToCopy(all))
+    }
+
+    @Test
     fun blankSearchMeansNoSearch() {
         assertEquals(listOf(1L, 2L, 3L, 4L), ids(FolderFilter.All, "   "))
     }

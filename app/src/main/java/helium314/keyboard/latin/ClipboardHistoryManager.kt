@@ -143,6 +143,15 @@ class ClipboardHistoryManager(
         clipboardDao?.togglePinned(id)
     }
 
+    fun setClipsPinned(ids: Collection<Long>, pinned: Boolean) {
+        clipboardDao?.setPinned(ids, pinned)
+    }
+
+    /** puts the text on the system clipboard, like a copy from any app */
+    fun copyTextToClipboard(text: String) {
+        clipboardManager.setPrimaryClip(ClipData.newPlainText("", text))
+    }
+
     fun clearHistory() {
         clipboardDao?.clearNonPinned()
         ClipboardManagerCompat.clearPrimaryClip(clipboardManager)

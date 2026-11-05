@@ -54,6 +54,21 @@ class ClipboardFolderTest {
     }
 
     @Test
+    fun pinningOnlyChangesTheGivenClips() {
+        val dao = newDao(context, "pin-${UUID.randomUUID()}.db")
+        dao.insertNewEntry(1000, false, "a", null, null, null)
+        dao.insertNewEntry(2000, false, "b", null, null, null)
+        fun pinnedOf(text: String) = dao.getAll().single { it.text == text }.isPinned
+
+        dao.setPinned(dao.getAll().filter { it.text == "a" }.map { it.id }, true)
+        assertTrue(pinnedOf("a"))
+        assertFalse(pinnedOf("b"))
+
+        dao.setPinned(dao.getAll().filter { it.text == "a" }.map { it.id }, false)
+        assertFalse(pinnedOf("a"))
+    }
+
+    @Test
     fun foldersAndMembershipSurviveRestart() {
         val name = "restart-${UUID.randomUUID()}.db"
         val dao = newDao(context, name)

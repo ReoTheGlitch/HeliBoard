@@ -29,6 +29,12 @@ class ClipboardAdapter(
     // the entries currently shown (after folder and search filter), positions refer to this list
     private var items: List<ClipboardHistoryEntry> = emptyList()
 
+    // multi-select: while selecting, a tap toggles the clip instead of pasting it
+    private var selectionMode = false
+    private var selectedIds: Set<Long> = emptySet()
+    var onSelectionToggle: ((Long) -> Unit)? = null
+    var onSelectionStart: ((Long) -> Unit)? = null
+
     var pinnedIconResId = 0
     var itemBackgroundId = 0
     var itemTypeFace: Typeface? = null
@@ -50,6 +56,15 @@ class ClipboardAdapter(
     fun entryAt(position: Int): ClipboardHistoryEntry? = items.getOrNull(position)
 
     fun positionOf(id: Long): Int = items.indexOfFirst { it.id == id }
+
+    /** the shown entries that are in [ids], in display order */
+    fun entriesInOrder(ids: Set<Long>): List<ClipboardHistoryEntry> = items.filter { it.id in ids }
+
+    fun setSelection(selecting: Boolean, ids: Set<Long>) {
+        selectionMode = selecting
+        selectedIds = ids
+        notifyDataSetChanged()
+    }
 
     /**
      * Replaces the shown entries.
@@ -130,6 +145,7 @@ class ClipboardAdapter(
             pinnedIconView.visibility = if (historyEntry.isPinned) View.VISIBLE else View.GONE
             contentImageView.visibility = if (historyEntry.filename != null) View.VISIBLE else View.GONE
             contentTextView.visibility = if (contentTextView.text.isNullOrEmpty()) View.GONE else View.VISIBLE
+            itemView.alpha = if (selectionMode && historyEntry.id in selectedIds) 0.5f else 1f
         }
 
         @SuppressLint("ClickableViewAccessibility")
@@ -141,11 +157,12 @@ class ClipboardAdapter(
         }
 
         override fun onClick(view: View) {
-            keyEventListener.onKeyUp(view.tag as Long)
+            if (selectionMode) onSelectionToggle?.invoke(view.tag as Long)
+            else keyEventListener.onKeyUp(view.tag as Long)
         }
 
         override fun onLongClick(view: View): Boolean {
-            clipboardHistoryManager?.toggleClipPinned(view.tag as Long)
+            onSelectionStart?.invoke(view.tag as Long)
             return true
         }
     }
