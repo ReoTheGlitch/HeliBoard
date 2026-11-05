@@ -33,7 +33,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew testRunTestsUnitTest
+        # testRunTestsUnitTest does not exist in this project, so run the debug unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Show clipboard benchmark
+        if: ${{ always() }}
+        run: cat app/build/reports/clipboard-benchmark.txt || echo "no benchmark report"
 
       - name: Archive reports for failed job
         uses: actions/upload-artifact@v4
