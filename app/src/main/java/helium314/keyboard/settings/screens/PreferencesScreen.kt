@@ -171,8 +171,8 @@ fun createPreferencesSettings(context: Context) = listOf(
     Setting(context, Settings.PREF_ENABLE_CLIPBOARD_HISTORY,
         R.string.enable_clipboard_history, R.string.enable_clipboard_history_summary)
     {
-        val ctx = LocalContext.current
-        SwitchPreference(it, Defaults.PREF_ENABLE_CLIPBOARD_HISTORY) { ClipboardDao.getInstance(ctx)?.clearNonPinned() }
+        // turning history off or on does not remove any clips
+        SwitchPreference(it, Defaults.PREF_ENABLE_CLIPBOARD_HISTORY)
     },
     Setting(context, Settings.PREF_CLIPBOARD_HISTORY_RETENTION_TIME, R.string.clipboard_history_retention_time) { setting ->
         val ctx = LocalContext.current
@@ -191,13 +191,9 @@ fun createPreferencesSettings(context: Context) = listOf(
         SwitchPreference(it, Defaults.PREF_CLIPBOARD_HISTORY_PINNED_FIRST)
     },
     Setting(context, Settings.PREF_CLIPBOARD_USE_FILES, R.string.clipboard_history_files) {
-        val ctx = LocalContext.current
-        SwitchPreference(it, Defaults.PREF_CLIPBOARD_USE_FILES) {
-            ClipboardDao.getInstance(ctx)?.cleanupFiles(ctx.prefs())
-        }
+        SwitchPreference(it, Defaults.PREF_CLIPBOARD_USE_FILES)
     },
     Setting(context, Settings.PREF_CLIPBOARD_FILES_SIZE_LIMIT, R.string.clipboard_history_max_file_size) { setting ->
-        val ctx = LocalContext.current
         SliderPreference(
             name = setting.title,
             key = setting.key,
@@ -207,7 +203,7 @@ fun createPreferencesSettings(context: Context) = listOf(
                 else stringResource(R.string.abbreviation_unit_mb, it.toString())
             },
             range = 1f..1001f,
-        ) { ClipboardDao.getInstance(ctx)?.cleanupFiles(ctx.prefs()) }
+        ) { }
     },
     Setting(context, Settings.PREF_VIBRATION_DURATION_SETTINGS, R.string.prefs_keypress_vibration_duration_settings) { setting ->
         SliderPreference(

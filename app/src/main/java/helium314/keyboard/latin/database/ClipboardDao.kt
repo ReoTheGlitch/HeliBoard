@@ -4,7 +4,6 @@ package helium314.keyboard.latin.database
 import android.content.ClipDescription
 import android.content.ContentValues
 import android.content.Context
-import android.content.SharedPreferences
 import android.net.Uri
 import android.os.SystemClock
 import android.webkit.MimeTypeMap
@@ -13,11 +12,9 @@ import androidx.core.database.getLongOrNull
 import androidx.core.database.getStringOrNull
 import helium314.keyboard.latin.ClipboardHistoryEntry
 import helium314.keyboard.latin.common.FileUtils
-import helium314.keyboard.latin.settings.Defaults
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.ChecksumCalculator
 import helium314.keyboard.latin.utils.Log
-import helium314.keyboard.latin.utils.prefs
 import java.io.File
 import kotlin.collections.joinToString
 
@@ -107,26 +104,6 @@ class ClipboardDao private constructor(private val db: Database) {
         insertNewEntry(timestamp, pinned, description.label?.toString(), file.name, description.getMimeTypes(), context)
     }
 
-    // keep pinned and the first non-pinned, others can be deleted
-    private fun deleteIfSizeExceeded(prefs: SharedPreferences) {
-        val sizeLimit = prefs.getInt(Settings.PREF_CLIPBOARD_FILES_SIZE_LIMIT, Defaults.PREF_CLIPBOARD_FILES_SIZE_LIMIT) * 1000000
-        var size = 0L
-        var keepMin = 1
-        val toRemove = mutableListOf<ClipboardHistoryEntry>()
-        cache.forEach {
-            if (it.filename == null) return@forEach
-            val file = File(clipFilesDir, it.filename)
-            size += file.length()
-            if (it.isPinned)
-                return@forEach
-            if (size > sizeLimit) {
-                if (keepMin > 0) --keepMin
-                else toRemove.add(it)
-            }
-        }
-        delete(toRemove)
-    }
-
     /** only public for restoring backups */
     fun insertNewEntry(timestamp: Long, pinned: Boolean, text: String?, filename: String?, mimeTypes: List<String>?, context: Context?, folderId: Long? = null) {
         val cv = ContentValues(6)
@@ -140,8 +117,6 @@ class ClipboardDao private constructor(private val db: Database) {
         val rowId = db.writableDatabase.insert(TABLE, null, cv)
 
         val entry = ClipboardHistoryEntry(rowId, timestamp, pinned, text, filename, mimeTypes, folderId)
-        if (filename != null && context != null)
-            deleteIfSizeExceeded(context.prefs())
         cache.add(entry)
         cache.sort()
         listener?.onClipInserted(cache.indexOf(entry))
@@ -247,19 +222,10 @@ class ClipboardDao private constructor(private val db: Database) {
         db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
     }
 
-    /** only public for restoring backups, keeps the folder id from the backup */
-    fun restoreFolder(id: Long, name: String) = synchronized(this) {
-        val cv = ContentValues(2).apply { put(COLUMN_ID, id); put(COLUMN_NAME, name) }
-        db.writableDatabase.insert(FOLDER_TABLE, null, cv)
-        folders.add(ClipboardFolder(id, name))
-    }
-
-    /** only public for restoring backups */
-    fun clearFolders() = synchronized(this) {
-        folders.clear()
-        cache.forEach { it.folderId = null }
-        db.writableDatabase.update(TABLE, ContentValues(1).apply { putNull(COLUMN_FOLDER_ID) }, null, null)
-        db.writableDatabase.delete(FOLDER_TABLE, null, null)
+    /** returns the folder with this name (ignoring case), or creates it. Used when restoring or importing. */
+    fun getOrCreateFolder(name: String): ClipboardFolder? {
+        val cleanName = cleanFolderName(name) ?: return null
+        return folders.firstOrNull { it.name.equals(cleanName, ignoreCase = true) } ?: createFolder(cleanName)
     }
 
     private fun cleanFolderName(name: String): String? =
@@ -296,38 +262,6 @@ class ClipboardDao private constructor(private val db: Database) {
             return // nothing to remove
         delete(cache.filter { !it.isPinned })
         listener?.onClipsRemoved(indicesToRemove[0], indicesToRemove.size)
-    }
-
-    fun clear() {
-        if (count() == 0) return
-        cache.clear()
-        listener?.onClipsRemoved(0, count())
-        db.writableDatabase.delete(TABLE, null, null)
-    }
-
-    fun cleanupFiles(prefs: SharedPreferences) {
-        if (!prefs.getBoolean(Settings.PREF_CLIPBOARD_USE_FILES, Defaults.PREF_CLIPBOARD_USE_FILES)) {
-            delete(cache.filter { it.filename != null && !it.isPinned })
-            return
-        }
-
-        val files = clipFilesDir.listFiles()?.toMutableList() ?: return
-        val fnames = files.mapTo(HashSet()) { it.name }
-        val entries = cache.filter { it.filename != null }
-        val enames = entries.mapTo(HashSet()) { it.filename }
-
-        val filesToRemove = files.filter { it.name !in enames }
-        val entriesToRemove = entries.filter { it.filename!! !in fnames }
-        if (filesToRemove.isEmpty() && entriesToRemove.isEmpty()) {
-            deleteIfSizeExceeded(prefs)
-            return
-        }
-
-        Log.w(TAG, "deleting ${filesToRemove.size} files and ${entriesToRemove.size} clipboard entries")
-        filesToRemove.forEach { it.delete() }
-        delete(entriesToRemove)
-
-        deleteIfSizeExceeded(prefs)
     }
 
     companion object {
@@ -371,7 +305,6 @@ class ClipboardDao private constructor(private val db: Database) {
                     instance = ClipboardDao(Database.getInstance(context))
                     clipFilesDir = File(context.filesDir, "clipboard")
                     clipFilesDir.mkdirs()
-                    instance?.cleanupFiles(context.prefs())
                 } catch (e: Throwable) {
                     Log.e(TAG, "can't create ClipboardDao", e)
                 }

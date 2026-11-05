@@ -301,7 +301,8 @@ class ClipboardHistoryManager(
                 context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null).use {
                     if (it?.moveToFirst() != true) return false
                     val size = it.getLong(0)
-                    return size <= maxSize * 1000000 // maxSize is megabytes
+                    // maxSize is megabytes per file, above 1000 means no limit. Files are never removed later.
+                    return maxSize > 1000 || size <= maxSize * 1000000
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "error checking clip size", e) // happens with SecurityException: Permission Denial

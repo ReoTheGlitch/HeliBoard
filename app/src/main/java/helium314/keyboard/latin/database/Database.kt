@@ -55,25 +55,36 @@ class Database private constructor(context: Context, name: String = NAME) : SQLi
                     if (clipDao == null) {
                         Log.e(TAG, "can't transfer clipboard data because ClipboardDao is null")
                     } else {
-                        clipDao.clear()
-                        clipDao.clearFolders()
+                        // merge into the current history, nothing is removed: folders are matched by name,
+                        // and a clip is skipped if the same text (or file) is already in the history
+                        val knownTexts = clipDao.getAll().mapNotNullTo(HashSet()) { it.text }
+                        val knownFiles = clipDao.getAll().mapNotNullTo(HashSet()) { it.filename }
+                        val folderIds = HashMap<Long, Long>() // folder id in the backup -> folder id here
                         otherDb.readableDatabase.rawQuery("SELECT ID, NAME FROM FOLDER", null).use {
                             while (it.moveToNext()) {
-                                clipDao.restoreFolder(it.getLong(0), it.getString(1))
+                                clipDao.getOrCreateFolder(it.getString(1))?.let { folder -> folderIds[it.getLong(0)] = folder.id }
                             }
                         }
                         otherDb.readableDatabase.rawQuery("SELECT TIMESTAMP, PINNED, TEXT, FILE, MIME_TYPE, FOLDER_ID FROM CLIPBOARD", null)
                             .use {
                                 while (it.moveToNext()) {
-                                    clipDao.insertNewEntry(
-                                        it.getLong(0),
-                                        it.getInt(1) != 0,
-                                        it.getStringOrNull(2),
-                                        it.getStringOrNull(3),
-                                        it.getStringOrNull(4)?.split("§"),
-                                        null,
-                                        it.getLongOrNull(5)
-                                    )
+                                    val text = it.getStringOrNull(2)
+                                    val file = it.getStringOrNull(3)
+                                    val duplicate = (text != null && text in knownTexts) || (file != null && file in knownFiles)
+                                    if (!duplicate) {
+                                        val folderId = it.getLongOrNull(5)?.let { backupId -> folderIds[backupId] }
+                                        clipDao.insertNewEntry(
+                                            it.getLong(0),
+                                            it.getInt(1) != 0,
+                                            text,
+                                            file,
+                                            it.getStringOrNull(4)?.split("§"),
+                                            null,
+                                            folderId
+                                        )
+                                        text?.let { knownTexts.add(it) }
+                                        file?.let { knownFiles.add(it) }
+                                    }
                                 }
                             }
                     }
