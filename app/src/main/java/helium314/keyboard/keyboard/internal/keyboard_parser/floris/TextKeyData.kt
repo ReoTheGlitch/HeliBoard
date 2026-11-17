@@ -254,6 +254,18 @@ sealed interface KeyData : AbstractKeyData {
         private const val POPUP_KEYS_NAVIGATE_NEXT = "!icon/clipboard_action_key|!code/key_clipboard,!icon/next_key|!code/key_action_next"
         private const val POPUP_KEYS_NAVIGATE_PREVIOUS_NEXT = "!fixedColumnOrder!3,!needsDividers!,!icon/previous_key|!code/key_action_previous,!icon/clipboard_action_key|!code/key_clipboard,!icon/next_key|!code/key_action_next"
         private const val POPUP_KEYS_NAVIGATE_EMOJI_PREVIOUS = "!fixedColumnOrder!3,!needsDividers!,!icon/previous_key|!code/key_action_previous,!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji"
+        // backslash must be escaped in popup key texts
+        private val EMOTICON_POPUP_KEYS = listOf(
+            Key.POPUP_KEYS_HAS_LABELS, "!fixedColumnOrder!2",
+            "(◕‿◕)", "ʕ•ᴥ•ʔ",
+            "(ಠ_ಠ)", "ಥ_ಥ",
+            "¯\\\\_(ツ)_/¯", "(╯°□°)╯︵┻━┻",
+            "(づ｡◕‿‿◕｡)づ", "ヽ(・∀・)ﾉ",
+            "(=^･ω･^=)", "(╥﹏╥)",
+            "(¬‿¬)", "♪(´▽｀)",
+            "\\\\o/", "TwT",
+            ":3", "^_^",
+        )
         private const val POPUP_KEYS_NAVIGATE_EMOJI = "!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji"
         private const val POPUP_KEYS_NAVIGATE_EMOJI_NEXT = "!fixedColumnOrder!3,!needsDividers!,!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji,!icon/next_key|!code/key_action_next"
         private const val POPUP_KEYS_NAVIGATE_EMOJI_PREVIOUS_NEXT = "!fixedColumnOrder!4,!needsDividers!,!icon/previous_key|!code/key_action_previous,!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji,!icon/next_key|!code/key_action_next"
@@ -473,6 +485,8 @@ sealed interface KeyData : AbstractKeyData {
             )
 
             KeyLabel.ZWNJ -> SimplePopups(listOf("!icon/zwj_key|\u200D"))
+            // long-press on the emoji key shows emoticons
+            toolbarKeyStrings[ToolbarKey.EMOJI] -> SimplePopups(EMOTICON_POPUP_KEYS)
             // only add currency popups if there are none defined on the key
             KeyLabel.CURRENCY -> if (popup.isEmpty()) SimplePopups(params.mLocaleKeyboardInfos.currencyKey.second) else null
             else -> null
