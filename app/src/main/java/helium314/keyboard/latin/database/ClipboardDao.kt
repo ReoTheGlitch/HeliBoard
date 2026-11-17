@@ -226,20 +226,31 @@ class ClipboardDao private constructor(private val db: Database) {
     }
 
     /**
-     * Adds the folders and clips of an export to the history. Nothing is removed or changed:
-     * folders are matched by name, and a clip is skipped if its text is in the history already.
-     * Returns the number of added clips.
+     * Adds the folders and clips of an export to the history. Nothing is removed:
+     * folders are matched by name, and a clip whose text is in the history already is not added again.
+     * Such a clip is moved to the folder it has in the file, so an edited export can organize the history.
+     * A clip without folder in the file stays where it is.
      */
-    fun importClips(export: ClipboardExport): Int = synchronized(this) {
+    fun importClips(export: ClipboardExport): ClipboardImportResult = synchronized(this) {
         export.folders.forEach { getOrCreateFolder(it) }
-        val knownTexts = cache.mapNotNullTo(HashSet()) { it.text }
+        val byId = cache.associateBy { it.id }
+        val byText = HashMap<String, ClipboardHistoryEntry>()
+        cache.forEach { entry -> entry.text?.let { if (entry.filename == null) byText.putIfAbsent(it, entry) } }
         val added = mutableListOf<ClipboardHistoryEntry>()
+        val moves = HashMap<Long, MutableList<Long>>() // folder id -> ids of the clips to move there
+        var unchanged = 0
         val database = db.writableDatabase
         database.beginTransaction()
         try {
             for (clip in export.clips) {
-                if (clip.text.isEmpty() || !knownTexts.add(clip.text)) continue
+                if (clip.text.isEmpty()) continue
                 val folderId = clip.folder?.let { getOrCreateFolder(it)?.id }
+                val existing = clip.id?.let { byId[it] }?.takeIf { it.text == clip.text && it.filename == null } ?: byText[clip.text]
+                if (existing != null) {
+                    if (folderId != null && existing.folderId != folderId) moves.getOrPut(folderId) { mutableListOf() }.add(existing.id)
+                    else unchanged++
+                    continue
+                }
                 val cv = ContentValues(4)
                 cv.put(COLUMN_TIMESTAMP, clip.timestamp)
                 cv.put(COLUMN_PINNED, clip.pinned)
@@ -247,19 +258,24 @@ class ClipboardDao private constructor(private val db: Database) {
                 cv.put(COLUMN_FOLDER_ID, folderId)
                 val rowId = database.insert(TABLE, null, cv)
                 if (rowId == -1L) continue
-                added.add(ClipboardHistoryEntry(rowId, clip.timestamp, clip.pinned, clip.text, null, null, folderId))
+                val entry = ClipboardHistoryEntry(rowId, clip.timestamp, clip.pinned, clip.text, null, null, folderId)
+                added.add(entry)
+                byText[clip.text] = entry
             }
             database.setTransactionSuccessful()
         } finally {
             database.endTransaction()
         }
-        if (added.isEmpty()) return@synchronized 0
-        cache.addAll(added)
-        cache.sort()
-        // the clipboard view reloads its list, on the main thread because import runs in the background
-        val position = cache.indexOf(added.first())
-        Handler(Looper.getMainLooper()).post { listener?.onClipInserted(position) }
-        added.size
+        moves.forEach { (folderId, ids) -> moveClipsToFolder(ids, folderId) }
+        if (added.isNotEmpty()) {
+            cache.addAll(added)
+            cache.sort()
+        }
+        if (added.isNotEmpty() || moves.isNotEmpty()) {
+            // the clipboard view reloads its list, on the main thread because import runs in the background
+            Handler(Looper.getMainLooper()).post { listener?.onClipInserted(0) }
+        }
+        ClipboardImportResult(added.size, moves.values.sumOf { it.size }, unchanged)
     }
 
     private fun cleanFolderName(name: String): String? =

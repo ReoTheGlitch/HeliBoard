@@ -52,8 +52,8 @@ fun ClipboardExportImportPreference(setting: Setting) {
                 val dao = ClipboardDao.getInstance(ctx)!!
                 val text = ctx.contentResolver.openInputStream(uri)!!.use { it.reader().readText() }
                 val export = ClipboardJson.decode(text)
-                val added = dao.importClips(export)
-                ctx.getString(R.string.clipboard_import_done, added, export.clips.size - added)
+                val result = dao.importClips(export)
+                ctx.getString(R.string.clipboard_import_done, result.added, result.moved, result.unchanged)
             } catch (e: Throwable) {
                 Log.w("ClipboardExportImport", "could not import clipboard history", e)
                 ctx.getString(R.string.file_read_error)
