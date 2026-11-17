@@ -199,6 +199,6 @@ object Defaults {
     const val PREF_USER_MORE_COLORS = 0
     const val PREF_USER_ALL_COLORS = ""
     const val PREF_SAVE_SUBTYPE_PER_APP = false
-    const val PREF_SPELLCHECK_SUGGEST = true
+    const val PREF_SPELLCHECK_SUGGEST = false
     const val PREF_SHOW_ONLY_TOOLBAR_WITH_HARDWARE_KEYBOARD = false
 }
