@@ -224,6 +224,16 @@ private fun restoreLauncher(onError: (String) -> Unit): ManagedActivityResultLau
                     throw Exception("nothing to restore in the given file")
 
                 Database.copyFromDb(restoredDb, ctx)
+                // the clipboard history is merged with the backup, so the files of the clips that were here before are kept
+                File(filesDir2, "clipboard").listFiles()?.forEach {
+                    val target = File(File(filesDir, "clipboard"), it.name)
+                    if (!target.exists()) {
+                        target.parentFile?.mkdirs()
+                        it.copyTo(target)
+                    }
+                }
+                // a retention time from the backup must not remove the restored clips, back to the default (no limit)
+                ctx.prefs().edit { remove(Settings.PREF_CLIPBOARD_HISTORY_RETENTION_TIME) }
                 filesDir2.deleteRecursively()
                 deviceProtectedFilesDir2.deleteRecursively()
                 if (Looper.myLooper() == null)
