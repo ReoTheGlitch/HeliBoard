@@ -226,6 +226,8 @@
     <string name="clipboard_search_hint">Search clips</string>
     <!-- Clipboard panel: number of selected clips -->
     <string name="clipboard_selected_count">%d selected</string>
+    <!-- Clipboard panel: selects all shown clips (the folder or the search results), or unselects them if all are selected -->
+    <string name="clipboard_selection_all">All</string>
     <!-- Clipboard panel: action for the selected clips, pins them (or unpins them if all are pinned) -->
     <string name="clipboard_selection_pin">Pin</string>
     <!-- Clipboard panel: action for the selected clips, then choose the folder to move them to -->

@@ -67,6 +67,8 @@ class ClipboardAdapter(
     /** the shown entries that are in [ids], in display order */
     fun entriesInOrder(ids: Set<Long>): List<ClipboardHistoryEntry> = items.filter { it.id in ids }
 
+    fun shownIds(): List<Long> = items.map { it.id }
+
     /** ids of the shown entries from one position to another, both included, in any order */
     fun idsBetween(from: Int, to: Int): List<Long> {
         if (items.isEmpty()) return emptyList()

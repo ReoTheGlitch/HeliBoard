@@ -34,6 +34,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
     var onSelectionMove: (() -> Unit)? = null
     var onSelectionCopy: (() -> Unit)? = null
     var onSelectionCancel: (() -> Unit)? = null
+    var onSelectAll: (() -> Unit)? = null
     /** called with the folder to move the selected clips to, null for no folder */
     var onMoveTarget: ((Long?) -> Unit)? = null
 
@@ -55,6 +56,10 @@ class ClipboardFolderBar @JvmOverloads constructor(
         isGone = true
         setOnClickListener { onInputClick?.invoke() }
     }
+    private val selectResultsButton = keyText(context.getString(R.string.clipboard_selection_all)).apply {
+        isGone = true
+        setOnClickListener { onSelectAll?.invoke() }
+    }
     private val confirmButton = keyText("✓").apply { isGone = true; setOnClickListener { onConfirmInput?.invoke() } }
     private val cancelButton = keyText("✕").apply { isGone = true; setOnClickListener { onCancelInput?.invoke() } }
 
@@ -63,6 +68,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         gravity = Gravity.CENTER_VERTICAL
         setSingleLine(true)
     }
+    private val allButton = keyText(context.getString(R.string.clipboard_selection_all)).apply { setOnClickListener { onSelectAll?.invoke() } }
     private val pinButton = keyText(context.getString(R.string.clipboard_selection_pin)).apply { setOnClickListener { onSelectionPin?.invoke() } }
     private val moveButton = keyText(context.getString(R.string.clipboard_selection_move)).apply { setOnClickListener { onSelectionMove?.invoke() } }
     private val copyButton = keyText(context.getString(R.string.clipboard_selection_copy)).apply { setOnClickListener { onSelectionCopy?.invoke() } }
@@ -74,10 +80,11 @@ class ClipboardFolderBar @JvmOverloads constructor(
         addView(chipScroll, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
         addView(searchButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(inputLabel, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        addView(selectResultsButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(confirmButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(cancelButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         selectionRow.addView(selectionCount, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
-        listOf(pinButton, moveButton, copyButton, closeSelectionButton).forEach {
+        listOf(allButton, pinButton, moveButton, copyButton, closeSelectionButton).forEach {
             selectionRow.addView(it, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         }
         addView(selectionRow, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
@@ -94,7 +101,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         selectionCount.setTextColor(textColor)
         selectionCount.typeface = typeface
         selectionCount.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
-        listOf(searchButton, confirmButton, cancelButton, pinButton, moveButton, copyButton, closeSelectionButton).forEach {
+        listOf(searchButton, selectResultsButton, confirmButton, cancelButton, allButton, pinButton, moveButton, copyButton, closeSelectionButton).forEach {
             it.setTextColor(textColor)
             it.typeface = typeface
             it.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
@@ -107,6 +114,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         chipScroll.isVisible = true
         searchButton.isVisible = true
         inputLabel.isGone = true
+        selectResultsButton.isGone = true
         confirmButton.isGone = true
         cancelButton.isGone = true
         selectionRow.isGone = true
@@ -135,14 +143,16 @@ class ClipboardFolderBar @JvmOverloads constructor(
     /**
      * shows the text line with [text] instead of the chips. [hint] is shown when [text] is empty.
      * [showConfirm] adds the confirm button, [confirmEnabled] tells whether it can be used.
+     * [showSelectAll] adds the button that selects all shown clips (the search results).
      */
-    fun showInput(text: String, hint: String, showConfirm: Boolean, confirmEnabled: Boolean) {
+    fun showInput(text: String, hint: String, showConfirm: Boolean, confirmEnabled: Boolean, showSelectAll: Boolean = false) {
         chipScroll.isGone = true
         searchButton.isGone = true
         selectionRow.isGone = true
         inputLabel.text = text.ifEmpty { hint }
         inputLabel.alpha = if (text.isEmpty()) 0.5f else 1f
         inputLabel.isVisible = true
+        selectResultsButton.isVisible = showSelectAll
         confirmButton.isVisible = showConfirm
         confirmButton.alpha = if (confirmEnabled) 1f else 0.4f
         cancelButton.isVisible = true
@@ -153,6 +163,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         chipScroll.isGone = true
         searchButton.isGone = true
         inputLabel.isGone = true
+        selectResultsButton.isGone = true
         confirmButton.isGone = true
         cancelButton.isGone = true
         selectionRow.isVisible = true
@@ -165,6 +176,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         chipScroll.isVisible = true
         searchButton.isGone = true
         inputLabel.isGone = true
+        selectResultsButton.isGone = true
         confirmButton.isGone = true
         cancelButton.isVisible = true
         selectionRow.isGone = true

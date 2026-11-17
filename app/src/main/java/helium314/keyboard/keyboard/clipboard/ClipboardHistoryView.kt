@@ -151,6 +151,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
             onSelectionMove = { moveTargetMode = true; updateSelectionUi() }
             onSelectionCopy = { copySelection() }
             onSelectionCancel = { endSelection() }
+            onSelectAll = { selectAllShown() }
             onMoveTarget = { moveSelectionTo(it) }
         }
         clipboardAdapter.onSelectionStart = { id, position ->
@@ -358,9 +359,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
             }
             inputShown -> {
                 val hint = context.getString(if (inputMode == InputMode.SEARCH) R.string.clipboard_search_hint else R.string.clipboard_folder_name_hint)
-                folderBar.showInput(text, hint, showConfirm = inputMode != InputMode.SEARCH, confirmEnabled = text.isNotBlank())
+                folderBar.showInput(text, hint, showConfirm = inputMode != InputMode.SEARCH, confirmEnabled = text.isNotBlank(),
+                    showSelectAll = inputMode == InputMode.SEARCH && clipboardAdapter.itemCount > 0)
             }
-            searchQuery != null -> folderBar.showInput(text, context.getString(R.string.clipboard_search_hint), showConfirm = false, confirmEnabled = false)
+            searchQuery != null -> folderBar.showInput(text, context.getString(R.string.clipboard_search_hint), showConfirm = false,
+                confirmEnabled = false, showSelectAll = clipboardAdapter.itemCount > 0)
             else -> refreshFolderBar()
         }
         bottomRowKeyboard.isVisible = !inputShown
@@ -416,6 +419,22 @@ class ClipboardHistoryView @JvmOverloads constructor(
 
     private fun toggleSelection(id: Long) {
         if (!selectedIds.add(id)) selectedIds.remove(id)
+        updateSelectionUi()
+    }
+
+    /**
+     * selects all shown clips (the folder, or the search results), also starts the selection.
+     * If all of them are selected already, they are unselected.
+     */
+    private fun selectAllShown() {
+        val shown = clipboardAdapter.shownIds()
+        if (shown.isEmpty()) return
+        if (inputMode != InputMode.NONE) stopInput() // a search text stays active, the keyboard closes
+        if (selectionActive && selectedIds.containsAll(shown)) selectedIds.removeAll(shown.toSet())
+        else selectedIds.addAll(shown)
+        selectionActive = true
+        moveTargetMode = false
+        selectedBeforeDrag = selectedIds.toSet()
         updateSelectionUi()
     }
 
