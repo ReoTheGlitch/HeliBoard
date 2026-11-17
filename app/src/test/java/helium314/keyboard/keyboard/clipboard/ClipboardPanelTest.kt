@@ -18,6 +18,9 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.database.ClipboardDao
+import helium314.keyboard.keyboard.KeyboardTheme
+import helium314.keyboard.latin.settings.Settings
+import helium314.keyboard.latin.utils.prefs
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -132,6 +135,8 @@ class ClipboardPanelTest {
         touch(MotionEvent.ACTION_MOVE, back.left + 5f, back.top + 5f, downTime)
         assertTrue(hasButton(bar, "${list.getChildAdapterPosition(back) + 1} selected"), "bar shows ${texts(bar).map { it.text }}")
         touch(MotionEvent.ACTION_UP, back.left + 5f, back.top + 5f, downTime)
+        assertTrue(list.getChildAt(0).findViewById<View>(R.id.clipboard_entry_selected_mark).isVisible)
+        assertFalse(list.getChildAt(3).findViewById<View>(R.id.clipboard_entry_selected_mark).isVisible)
         screenshot("2-selection")
 
         // all selection buttons fit in the bar
@@ -192,6 +197,7 @@ class ClipboardPanelTest {
         assertEquals(listOf("clip number 40"), dao.getAll().filter { it.isPinned }.map { it.text })
         assertEquals("clip number 40", shownClipTexts().first())
         assertTrue(list.getChildAt(0).findViewById<View>(R.id.clipboard_entry_pinned_icon).isVisible)
+        assertEquals(1_700_000_000_000 + 40 * 60_000L, dao.getAll().single { it.isPinned }.timeStamp) // pinning keeps the date
 
         // a tap pastes the clip when nothing is selected
         ShadowInputMethodService.reset()
@@ -199,5 +205,19 @@ class ClipboardPanelTest {
         idle()
         assertEquals("clip number 39", ShadowInputMethodService.text)
         screenshot("5-pinned")
+
+        // the panel again in a dark theme with key borders, for the screenshots
+        latinIME.prefs().edit().putString(Settings.PREF_THEME_COLORS, KeyboardTheme.THEME_DARK)
+            .putBoolean(Settings.PREF_THEME_DAY_NIGHT, false).putBoolean(Settings.PREF_THEME_KEY_BORDERS, true).commit()
+        Settings.getInstance().loadSettings(latinIME)
+        keyboardSwitcher.setThemeNeedsReload()
+        openPanel()
+        screenshot("6-dark-list")
+        assertTrue(list.getChildAt(1).performLongClick())
+        idle()
+        screenshot("7-dark-selection")
+        click(bar, "✕")
+        click(bar, "Search")
+        screenshot("8-dark-search")
     }
 }

@@ -897,7 +897,7 @@ New dictionary:
 \n► Swipe up from a suggestion to open more suggestions, and release on the suggestion to select it. &lt;br&gt; &lt;br&gt;
 \n► Long-press an entry in the clipboard history to select entries (keep the finger down and drag to select more), then pin, move to a folder or copy all of them (keep pinned entries until you unpin). &lt;br&gt; &lt;br&gt;
 \n► Swipe left in clipboard view to remove an entry (except when it\'s pinned) &lt;br&gt; &lt;br&gt;
-\n► Swipe right in clipboard view to pin or unpin an entry. &lt;br&gt; &lt;br&gt;
+\n► Swipe right in clipboard view to pin or unpin an entry, it keeps its date. &lt;br&gt; &lt;br&gt;
 \n► Select text and press shift to switch between uppercase, lowercase and capitalize words. &lt;br&gt; &lt;br&gt;
 \n► You can add dictionaries by opening them in a file explorer: &lt;br&gt;
 \n\t• This only works with &lt;i&gt;content-uris&lt;/i&gt; and not with &lt;i&gt;file-uris&lt;/i&gt;, meaning that it may not work with some file explorers. &lt;br&gt; &lt;br&gt;

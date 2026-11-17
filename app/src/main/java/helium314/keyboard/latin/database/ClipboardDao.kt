@@ -149,28 +149,21 @@ class ClipboardDao private constructor(private val db: Database) {
 
     fun sort() = cache.sort()
 
-    /** pins or unpins the given clips, like [togglePinned] they move to the top of their group. Only these rows are written. */
+    /** pins or unpins the given clips, they keep their date. Only these rows are written. */
     fun setPinned(ids: Collection<Long>, pinned: Boolean) = synchronized(this) {
         val idSet = ids.toHashSet()
         val entries = cache.filter { it.id in idSet && it.isPinned != pinned }
         if (entries.isEmpty()) return@synchronized
-        val now = System.currentTimeMillis()
-        entries.forEach {
-            it.isPinned = pinned
-            it.timeStamp = now
-        }
+        entries.forEach { it.isPinned = pinned }
         cache.sort()
-        val cv = ContentValues(2).apply {
-            put(COLUMN_PINNED, pinned)
-            put(COLUMN_TIMESTAMP, now)
-        }
+        val cv = ContentValues(1).apply { put(COLUMN_PINNED, pinned) }
         db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
     }
 
     fun togglePinned(id: Long) = synchronized(this) {
         val entry = cache.first { it.id == id }
+        // the date is kept, it shows when the clip was copied
         entry.isPinned = !entry.isPinned
-        entry.timeStamp = System.currentTimeMillis()
         if (listener != null) {
             val oldPos = cache.indexOf(entry)
             cache.sort()
@@ -179,9 +172,8 @@ class ClipboardDao private constructor(private val db: Database) {
         } else {
             cache.sort()
         }
-        val cv = ContentValues(2)
+        val cv = ContentValues(1)
         cv.put(COLUMN_PINNED, entry.isPinned)
-        cv.put(COLUMN_TIMESTAMP, entry.timeStamp)
         db.writableDatabase.update(TABLE, cv, "$COLUMN_ID = ${entry.id}", null)
     }
 

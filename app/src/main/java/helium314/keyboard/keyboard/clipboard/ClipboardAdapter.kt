@@ -141,6 +141,7 @@ class ClipboardAdapter(
         private val contentTextView: TextView
         private val contentImageView: ImageView
         private val dateView: TextView
+        private val selectedMarkView: TextView
 
         init {
             view.apply {
@@ -166,6 +167,11 @@ class ClipboardAdapter(
                 setTextColor(itemTextColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, itemTextSize * 0.7f)
             }
+            selectedMarkView = view.findViewById<TextView>(R.id.clipboard_entry_selected_mark).apply {
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(itemTextColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, itemTextSize)
+            }
             clipboardLayoutParams.setItemProperties(view)
             val colors = Settings.getValues().mColors
             colors.setColor(pinnedIconView, ColorType.CLIPBOARD_PIN)
@@ -188,7 +194,10 @@ class ClipboardAdapter(
         }
 
         fun setSelected(historyEntry: ClipboardHistoryEntry?) {
-            itemView.alpha = if (selectionMode && historyEntry != null && historyEntry.id in selectedIds) 0.5f else 1f
+            // selected clips have a check mark, the others are dimmed while selecting
+            val selected = selectionMode && historyEntry != null && historyEntry.id in selectedIds
+            selectedMarkView.visibility = if (selected) View.VISIBLE else View.GONE
+            itemView.alpha = if (selectionMode && !selected) 0.6f else 1f
         }
 
         @SuppressLint("ClickableViewAccessibility")
