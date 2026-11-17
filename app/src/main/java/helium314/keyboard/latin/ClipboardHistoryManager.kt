@@ -148,9 +148,15 @@ class ClipboardHistoryManager(
     }
 
     /** puts the text on the system clipboard, like a copy from any app */
-    fun copyTextToClipboard(text: String) {
+    fun copyTextToClipboard(text: String): Boolean = try {
         clipboardManager.setPrimaryClip(ClipData.newPlainText("", text))
+        true
+    } catch (e: Exception) { // the system refuses very long texts
+        Log.w(TAG, "could not copy text of length ${text.length}", e)
+        false
     }
+
+    fun deleteFolder(id: Long): Boolean = clipboardDao?.deleteFolder(id) == true
 
     fun clearHistory() {
         clipboardDao?.clearNonPinned()

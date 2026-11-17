@@ -69,6 +69,44 @@ class ClipboardFolderTest {
     }
 
     @Test
+    fun deletingAFolderKeepsItsClips() {
+        val name = "delete-folder-${UUID.randomUUID()}.db"
+        val dao = newDao(context, name)
+        val folder = assertNotNull(dao.createFolder("Work"))
+        val other = assertNotNull(dao.createFolder("Other"))
+        dao.insertNewEntry(1000, false, "a", null, null, null, folder.id)
+        dao.insertNewEntry(2000, true, "b", null, null, null, other.id)
+        assertTrue(dao.deleteFolder(folder.id))
+        assertFalse(dao.deleteFolder(folder.id))
+        assertEquals(listOf("Other"), dao.getFolders().map { it.name })
+        assertNull(dao.getAll().single { it.text == "a" }.folderId)
+        assertEquals(other.id, dao.getAll().single { it.text == "b" }.folderId)
+
+        val restarted = newDao(context, name)
+        assertEquals(listOf("Other"), restarted.getFolders().map { it.name })
+        assertEquals(2, restarted.getAll().size)
+        assertNull(restarted.getAll().single { it.text == "a" }.folderId)
+    }
+
+    @Test
+    fun editingAClipKeepsDatePinAndFolder() {
+        val name = "edit-${UUID.randomUUID()}.db"
+        val dao = newDao(context, name)
+        val folder = assertNotNull(dao.createFolder("Work"))
+        dao.insertNewEntry(1000, true, "old text", null, null, null, folder.id)
+        dao.insertNewEntry(2000, false, "other", null, null, null)
+        val id = dao.getAll().single { it.text == "old text" }.id
+        assertFalse(dao.updateClipText(id, ""))
+        assertFalse(dao.updateClipText(id, "other")) // another clip has this text
+        assertTrue(dao.updateClipText(id, "new text\nline 2"))
+        val edited = newDao(context, name).getAll().single { it.id == id }
+        assertEquals("new text\nline 2", edited.text)
+        assertEquals(1000, edited.timeStamp)
+        assertTrue(edited.isPinned)
+        assertEquals(folder.id, edited.folderId)
+    }
+
+    @Test
     fun foldersAndMembershipSurviveRestart() {
         val name = "restart-${UUID.randomUUID()}.db"
         val dao = newDao(context, name)

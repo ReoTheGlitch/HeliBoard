@@ -30,6 +30,8 @@ import java.util.Locale
 @Composable
 fun ClipboardExportImportPreference(setting: Setting) {
     var showDialog by rememberSaveable { mutableStateOf(false) }
+    var showExportChoice by rememberSaveable { mutableStateOf(false) }
+    var onlyUnfiled by rememberSaveable { mutableStateOf(false) }
     var message: String? by rememberSaveable { mutableStateOf(null) }
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -37,7 +39,7 @@ fun ClipboardExportImportPreference(setting: Setting) {
         scope.launch(Dispatchers.IO) {
             message = try {
                 val dao = ClipboardDao.getInstance(ctx)!!
-                val export = ClipboardJson.toExport(dao.snapshot(), dao.getFolders())
+                val export = ClipboardJson.toExport(dao.snapshot(), dao.getFolders(), onlyUnfiled)
                 ctx.contentResolver.openOutputStream(uri)!!.use { it.write(ClipboardJson.encode(export).toByteArray()) }
                 ctx.getString(R.string.clipboard_export_done, export.clips.size)
             } catch (e: Throwable) {
@@ -74,14 +76,34 @@ fun ClipboardExportImportPreference(setting: Setting) {
                     .setAction(Intent.ACTION_OPEN_DOCUMENT)
                 importLauncher.launch(intent)
             },
+            onConfirmed = { showExportChoice = true }
+        )
+    }
+    if (showExportChoice) {
+        // a smaller file with only the clips that are in no folder is easier to handle for an AI assistant
+        ConfirmationDialog(
+            onDismissRequest = { showExportChoice = false },
+            title = { Text(stringResource(R.string.clipboard_export)) },
+            content = { Text(stringResource(R.string.clipboard_export_choice_message)) },
+            confirmButtonText = stringResource(R.string.clipboard_export_all),
+            neutralButtonText = stringResource(R.string.clipboard_export_unfiled),
+            onNeutral = {
+                showExportChoice = false
+                onlyUnfiled = true
+                exportLauncher.launch(exportIntent(ctx))
+            },
             onConfirmed = {
-                val currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
-                val intent = IntentUtils.getResolvableTypeIntent(ctx, "application/json")
-                    .setAction(Intent.ACTION_CREATE_DOCUMENT)
-                    .putExtra(Intent.EXTRA_TITLE, "clipboard_history_$currentDate.json")
-                exportLauncher.launch(intent)
+                onlyUnfiled = false
+                exportLauncher.launch(exportIntent(ctx))
             }
         )
     }
     message?.let { InfoDialog(it) { message = null } }
+}
+
+private fun exportIntent(ctx: android.content.Context): Intent {
+    val currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
+    return IntentUtils.getResolvableTypeIntent(ctx, "application/json")
+        .setAction(Intent.ACTION_CREATE_DOCUMENT)
+        .putExtra(Intent.EXTRA_TITLE, "clipboard_history_$currentDate.json")
 }

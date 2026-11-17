@@ -81,11 +81,37 @@ class ClipboardAdapter(
         return items.subList(first, last + 1).map { it.id }
     }
 
+    private var recyclerView: RecyclerView? = null
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        this.recyclerView = recyclerView
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        this.recyclerView = null
+    }
+
+    // rows that come back from the cache of the list are not bound again, so their selection state is set here
+    override fun onViewAttachedToWindow(holder: ViewHolder) {
+        holder.setSelected(entryAt(holder.bindingAdapterPosition))
+    }
+
+    /**
+     * Only the rows on screen are updated, without telling the list that items changed.
+     * This is fast with thousands of clips and while the selection changes on every move of the finger.
+     */
     fun setSelection(selecting: Boolean, ids: Set<Long>) {
         selectionMode = selecting
         selectedIds = ids
-        notifyItemRangeChanged(0, items.size, SELECTION_CHANGED)
+        val list = recyclerView ?: return
+        for (i in 0 until list.childCount) {
+            val holder = list.getChildViewHolder(list.getChildAt(i)) as? ViewHolder ?: continue
+            holder.setSelected(entryAt(holder.bindingAdapterPosition))
+        }
     }
+
+    /** called after a clip was swiped away, it is removed from the shown list only */
+    var onEntrySwipedAway: ((ClipboardHistoryEntry) -> Unit)? = null
 
     /**
      * Replaces the shown entries.
@@ -94,7 +120,8 @@ class ClipboardAdapter(
      */
     fun submitItems(newItems: List<ClipboardHistoryEntry>, animate: Boolean) {
         val oldItems = items
-        if (!animate) {
+        // comparing lists that differ a lot is slow and the animation is of no use then
+        if (!animate || kotlin.math.abs(newItems.size - oldItems.size) > 30) {
             items = newItems
             notifyDataSetChanged()
             return
@@ -114,13 +141,13 @@ class ClipboardAdapter(
         result.dispatchUpdatesTo(this)
     }
 
-    /** removes a clip from history and from the shown list, pinned clips are kept */
+    /** removes a clip from the shown list, pinned clips are kept. [onEntrySwipedAway] removes it from the history. */
     fun removeEntryAt(position: Int) {
         val entry = items.getOrNull(position) ?: return
         if (entry.isPinned) return
-        clipboardHistoryManager?.removeEntry(entry.id)
         items = items.toMutableList().apply { this.removeAt(position) }
         notifyItemRemoved(position)
+        onEntrySwipedAway?.invoke(entry)
     }
 
     /** pins or unpins a clip after it was swiped, the clip stays in the list */

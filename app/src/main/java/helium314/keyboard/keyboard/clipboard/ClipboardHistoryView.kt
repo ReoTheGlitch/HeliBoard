@@ -26,11 +26,16 @@ import helium314.keyboard.keyboard.PointerTracker
 import helium314.keyboard.keyboard.internal.KeyDrawParams
 import helium314.keyboard.keyboard.internal.KeyVisualAttributes
 import helium314.keyboard.keyboard.internal.keyboard_parser.floris.KeyCode
+import helium314.keyboard.latin.ClipboardHistoryEntry
 import helium314.keyboard.latin.ClipboardHistoryManager
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.common.Constants
 import helium314.keyboard.latin.database.ClipboardDao
+import helium314.keyboard.latin.database.ClipboardFolder
+import helium314.keyboard.latin.utils.Log
+import android.content.Intent
+import android.os.Looper
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.ResourceUtils
 import helium314.keyboard.latin.utils.ToolbarKey
@@ -78,9 +83,19 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private val selectedIds = mutableSetOf<Long>()
     private var selectedBeforeDrag: Set<Long> = emptySet() // drag-select adds the clips under the finger to these
 
+    // a swiped clip is only hidden at first, and removed when the time for undo is over
+    private var pendingDelete: ClipboardHistoryEntry? = null
+    private val commitDeleteRunnable = Runnable { commitPendingDelete() }
+
+    private var folderForActions: ClipboardFolder? = null // long-pressed folder, the bar shows rename and delete
+    private var confirmFolderDelete = false
+    private var listHasInputHeight: Boolean? = null
+
     private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER, SEARCH }
 
     companion object {
+        private const val UNDO_TIME_MS = 5000L
+        private const val MAX_SEARCH_LENGTH = 100
         private const val EMPTY_PLACEHOLDER = "¯\\_(ツ)_/¯" // same as in the layout
     }
 
@@ -134,13 +149,18 @@ class ClipboardHistoryView @JvmOverloads constructor(
                 refreshList(animate = false)
             }
             onNewFolder = { startInput(InputMode.NEW_FOLDER, "") }
-            onRenameFolder = { folder ->
-                renamingFolderId = folder.id
-                startInput(InputMode.RENAME_FOLDER, folder.name)
+            onFolderLongClick = { folder ->
+                folderForActions = folder
+                confirmFolderDelete = false
+                updateInputState()
             }
+            onSelectionPaste = { safely { pasteSelection() } }
+            onSelectionEdit = { editSelection() }
             onConfirmInput = { confirmInput() }
             onCancelInput = {
                 when {
+                    folderForActions != null -> { folderForActions = null; confirmFolderDelete = false; updateInputState() }
+                    pendingDelete != null && !selectionActive && inputMode == InputMode.NONE && searchQuery == null -> commitPendingDelete()
                     selectionActive && moveTargetMode -> { moveTargetMode = false; updateSelectionUi() }
                     selectionActive -> endSelection()
                     inputMode == InputMode.SEARCH || (inputMode == InputMode.NONE && searchQuery != null) -> clearSearch()
@@ -151,18 +171,24 @@ class ClipboardHistoryView @JvmOverloads constructor(
             onInputClick = {
                 if (inputMode == InputMode.NONE && searchQuery != null) startInput(InputMode.SEARCH, searchQuery.orEmpty())
             }
-            onSelectionPin = { pinSelection() }
+            onSelectionPin = { safely { pinSelection() } }
             onSelectionMove = { moveTargetMode = true; updateSelectionUi() }
-            onSelectionCopy = { copySelection() }
+            onSelectionCopy = { safely { copySelection() } }
             onSelectionCancel = { endSelection() }
             onSelectAll = { selectAllShown() }
-            onMoveTarget = { moveSelectionTo(it) }
+            onMoveTarget = { safely { moveSelectionTo(it) } }
         }
         clipboardAdapter.onSelectionStart = { id, position ->
             startSelection(id)
             clipboardRecyclerView.startDragSelect(position)
         }
         clipboardRecyclerView.onDragSelect = { from, to -> dragSelect(from, to) }
+        clipboardAdapter.onEntrySwipedAway = { entry ->
+            commitPendingDelete()
+            pendingDelete = entry
+            postDelayed(commitDeleteRunnable, UNDO_TIME_MS)
+            updateInputState()
+        }
         clipboardAdapter.onSelectionToggle = { toggleSelection(it) }
         val clipboardStrip = KeyboardSwitcher.getInstance().clipboardStrip!!
         getEnabledClipboardToolbarKeys(context.prefs()).forEach {
@@ -235,6 +261,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         selectionActive = false
         moveTargetMode = false
         selectedIds.clear()
+        listHasInputHeight = null
 
         placeholderView.apply {
             KeyboardTypeface.applyToTextView(this)
@@ -268,6 +295,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
 
     fun stopClipboardHistory() {
         if (!this::clipboardAdapter.isInitialized) return
+        commitPendingDelete()
+        folderForActions = null
+        confirmFolderDelete = false
         inputMode = InputMode.NONE
         inputText.clear()
         searchQuery = null
@@ -311,18 +341,59 @@ class ClipboardHistoryView @JvmOverloads constructor(
     }
 
     // positions from the DAO refer to all clips, so the shown list is rebuilt from the DAO
-    override fun onClipInserted(position: Int) {
+    override fun onClipInserted(position: Int) = onMainThread {
         refreshList(scrollToId = clipboardHistoryManager.getHistoryEntry(position)?.id)
     }
 
-    override fun onClipsRemoved(position: Int, count: Int) {
+    override fun onClipsRemoved(position: Int, count: Int) = onMainThread {
         refreshList()
     }
 
-    override fun onClipMoved(oldPosition: Int, newPosition: Int) {
+    override fun onClipMoved(oldPosition: Int, newPosition: Int) = onMainThread {
         val movedId = clipboardHistoryManager.getHistoryEntry(newPosition)?.id
         refreshList(scrollToId = if (newPosition < oldPosition) movedId else null)
         movedId?.let { clipboardAdapter.entryChanged(it) }
+    }
+
+    // the list must only be changed on the main thread, and never while the panel is closed
+    private fun onMainThread(action: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) safely(action)
+        else post { if (clipboardRecyclerView.adapter != null) safely(action) }
+    }
+
+    /** an error in a clipboard action must not close the keyboard */
+    private fun safely(action: () -> Unit) {
+        try {
+            action()
+        } catch (e: Exception) {
+            Log.e("ClipboardHistoryView", "clipboard action failed", e)
+            Toast.makeText(context, R.string.clipboard_action_failed, Toast.LENGTH_SHORT).show()
+            runCatching {
+                selectionActive = false
+                moveTargetMode = false
+                selectedIds.clear()
+                clipboardAdapter.setSelection(false, selectedIds)
+                updateInputState()
+                refreshList(animate = false)
+            }
+        }
+    }
+
+    /** removes the swiped clip from the history, it can't be brought back after that */
+    private fun commitPendingDelete() {
+        removeCallbacks(commitDeleteRunnable)
+        val entry = pendingDelete ?: return
+        pendingDelete = null
+        if (::clipboardHistoryManager.isInitialized) clipboardHistoryManager.removeEntry(entry.id)
+        if (clipboardRecyclerView.adapter != null) updateInputState()
+    }
+
+    private fun undoDelete() {
+        removeCallbacks(commitDeleteRunnable)
+        val id = pendingDelete?.id ?: return
+        pendingDelete = null
+        updateInputState()
+        refreshList(scrollToId = id)
     }
 
     override fun onSharedPreferenceChanged(prefs: SharedPreferences?, key: String?) {
@@ -341,7 +412,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private fun refreshList(scrollToId: Long? = null, animate: Boolean = true) {
         val query = searchQuery
         val folder = if (query != null) FolderFilter.All else folderFilter
+        val hiddenId = pendingDelete?.id
         val visible = ClipboardListFilter.visible(clipboardHistoryManager.getAllEntries(), folder, query)
+            .let { clips -> if (hiddenId == null) clips else clips.filter { it.id != hiddenId } }
         // the folder of a clip is shown where clips of several folders are listed
         clipboardAdapter.folderNames = if (folder == FolderFilter.All) clipboardHistoryManager.getFolders().associate { it.id to it.name } else emptyMap()
         clipboardAdapter.submitItems(visible, animate)
@@ -372,8 +445,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
         when {
             selectionActive -> {
                 if (moveTargetMode) folderBar.showMoveTargets(clipboardHistoryManager.getFolders())
-                else folderBar.showSelection(selectedIds.size)
+                else folderBar.showSelection(selectedIds.size, canEdit = selectedTextClip() != null)
             }
+            folderForActions != null -> showFolderActions(folderForActions!!)
             inputShown -> {
                 val hint = context.getString(if (inputMode == InputMode.SEARCH) R.string.clipboard_search_hint else R.string.clipboard_folder_name_hint)
                 val isSearch = inputMode == InputMode.SEARCH
@@ -382,11 +456,72 @@ class ClipboardHistoryView @JvmOverloads constructor(
             }
             searchQuery != null -> folderBar.showInput(text, context.getString(R.string.clipboard_search_hint), editing = false, isSearch = true,
                 showConfirm = false, confirmEnabled = false, showSelectAll = clipboardAdapter.itemCount > 0)
+            pendingDelete != null -> folderBar.showActions(context.getString(R.string.clipboard_clip_deleted), listOf(
+                ClipboardFolderBar.BarAction(R.drawable.ic_undo, R.string.undo) { undoDelete() }
+            ))
             else -> refreshFolderBar()
         }
         bottomRowKeyboard.isVisible = !inputShown
         miniKeyboard.isVisible = inputShown
-        clipboardLayoutParams.setListProperties(clipboardRecyclerView, inputShown)
+        if (listHasInputHeight != inputShown) { // changing the height lays out the list again, only do it when necessary
+            listHasInputHeight = inputShown
+            clipboardLayoutParams.setListProperties(clipboardRecyclerView, inputShown)
+        }
+    }
+
+    private fun showFolderActions(folder: ClipboardFolder) {
+        if (confirmFolderDelete) {
+            folderBar.showActions(context.getString(R.string.clipboard_folder_delete_question, folder.name), listOf(
+                ClipboardFolderBar.BarAction(R.drawable.sym_keyboard_done_lxx, R.string.delete) {
+                    safely {
+                        clipboardHistoryManager.deleteFolder(folder.id)
+                        if (folderFilter == FolderFilter.Folder(folder.id)) folderFilter = FolderFilter.All
+                        folderForActions = null
+                        confirmFolderDelete = false
+                        updateInputState()
+                        refreshList(animate = false)
+                    }
+                }
+            ))
+            return
+        }
+        folderBar.showActions(folder.name, listOf(
+            ClipboardFolderBar.BarAction(R.drawable.ic_edit, R.string.clipboard_folder_rename) {
+                folderForActions = null
+                renamingFolderId = folder.id
+                startInput(InputMode.RENAME_FOLDER, folder.name)
+            },
+            ClipboardFolderBar.BarAction(R.drawable.ic_clipboard_delete, R.string.clipboard_folder_delete) {
+                confirmFolderDelete = true
+                updateInputState()
+            },
+        ))
+    }
+
+    /** the selected clip, if exactly one text clip is selected */
+    private fun selectedTextClip(): ClipboardHistoryEntry? {
+        if (selectedIds.size != 1) return null
+        val id = selectedIds.first()
+        return clipboardHistoryManager.getAllEntries().firstOrNull { it.id == id }?.takeIf { it.filename == null && it.text != null }
+    }
+
+    /** opens the selected clip in a text field, the normal keyboard is used there */
+    private fun editSelection() {
+        val clip = selectedTextClip() ?: return
+        endSelection()
+        safely {
+            context.startActivity(Intent(context, ClipboardEditActivity::class.java)
+                .putExtra(ClipboardEditActivity.EXTRA_CLIP_ID, clip.id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+        }
+    }
+
+    /** types the text of the selected text clips, one clip per line, in the order shown */
+    private fun pasteSelection() {
+        val text = ClipboardListFilter.textToCopy(clipboardAdapter.entriesInOrder(selectedIds))
+        if (text.isEmpty()) return
+        endSelection()
+        keyboardActionListener.onTextInput(text)
     }
 
     private fun startInput(mode: InputMode, initialText: String) {
@@ -422,6 +557,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         if (!selectionActive) selectedIds.clear()
         selectionActive = true
         moveTargetMode = false
+        folderForActions = null
         selectedIds.add(id)
         selectedBeforeDrag = selectedIds.toSet()
         updateSelectionUi()
@@ -482,8 +618,8 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private fun copySelection() {
         val text = ClipboardListFilter.textToCopy(clipboardAdapter.entriesInOrder(selectedIds))
         if (text.isEmpty()) return
-        clipboardHistoryManager.copyTextToClipboard(text)
-        Toast.makeText(context, R.string.toast_msg_clipboard_copy, Toast.LENGTH_SHORT).show()
+        val copied = clipboardHistoryManager.copyTextToClipboard(text)
+        Toast.makeText(context, if (copied) R.string.toast_msg_clipboard_copy else R.string.clipboard_copy_too_long, Toast.LENGTH_SHORT).show()
         endSelection()
     }
 
@@ -496,7 +632,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private fun handleInputKey(key: String) {
         when (key) {
             ClipboardMiniKeyboard.BACKSPACE_KEY -> if (inputText.isNotEmpty()) inputText.deleteCharAt(inputText.length - 1)
-            else -> if (inputText.length < ClipboardDao.MAX_FOLDER_NAME_LENGTH) inputText.append(key)
+            ClipboardMiniKeyboard.CLEAR_KEY -> inputText.setLength(0)
+            else -> {
+                val maxLength = if (inputMode == InputMode.SEARCH) MAX_SEARCH_LENGTH else ClipboardDao.MAX_FOLDER_NAME_LENGTH
+                if (inputText.length + key.length <= maxLength) inputText.append(key)
+            }
         }
         if (inputMode == InputMode.SEARCH) {
             searchQuery = inputText.toString()

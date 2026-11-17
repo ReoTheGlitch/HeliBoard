@@ -36,12 +36,13 @@ object ClipboardJson {
         "Do not change \"id\", \"text\" or \"timestamp\" and do not remove clips. " +
         "Return the complete file as valid JSON. Importing it moves the clips into the folders, nothing is deleted."
 
-    fun toExport(entries: List<ClipboardHistoryEntry>, folders: List<ClipboardFolder>): ClipboardExport {
+    /** with [onlyUnfiled] only the clips in no folder are exported, all folder names are still listed */
+    fun toExport(entries: List<ClipboardHistoryEntry>, folders: List<ClipboardFolder>, onlyUnfiled: Boolean = false): ClipboardExport {
         val folderNames = folders.associate { it.id to it.name }
         return ClipboardExport(
             instructions = INSTRUCTIONS,
             folders = folders.map { it.name },
-            clips = entries.filter { it.filename == null && it.text != null }
+            clips = entries.filter { it.filename == null && it.text != null && (!onlyUnfiled || it.folderId == null) }
                 .map { ExportedClip(it.id, it.text!!, it.timeStamp, it.isPinned, it.folderId?.let { id -> folderNames[id] }) }
         )
     }

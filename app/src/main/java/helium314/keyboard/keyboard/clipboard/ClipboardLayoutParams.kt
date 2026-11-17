@@ -41,7 +41,7 @@ class ClipboardLayoutParams(ctx: Context) {
         val rowCount = KeyboardParams.DEFAULT_KEYBOARD_ROWS + if (sv.mShowsNumberRow) 1 else 0
         bottomRowKeyboardHeight = (defaultKeyboardHeight - bottomPadding - topPadding) / rowCount - keyVerticalGap / 2
         headerHeight = bottomRowKeyboardHeight * 3 / 4
-        inputRowHeight = bottomRowKeyboardHeight * 3 / 5
+        inputRowHeight = bottomRowKeyboardHeight * 11 / 20
         // height calculation is not good enough, probably also because keyboard top padding might be off by a pixel (see KeyboardParser)
         val offset = 1.25f * res.displayMetrics.density * sv.mKeyboardHeightScale
         listHeight = defaultKeyboardHeight - headerHeight - bottomRowKeyboardHeight - bottomPadding + offset.toInt()

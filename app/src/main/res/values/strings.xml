@@ -228,6 +228,24 @@
     <string name="clipboard_selected_count">%d selected</string>
     <!-- Clipboard panel: selects all shown clips (the folder or the search results), or unselects them if all are selected -->
     <string name="clipboard_selection_all">Select all</string>
+    <!-- Clipboard panel: action for the selected clips, types their text into the text field -->
+    <string name="clipboard_selection_paste">Paste all</string>
+    <!-- Clipboard panel: action for one selected clip, and title of the screen where its text is changed -->
+    <string name="clipboard_edit_clip">Edit clip</string>
+    <!-- Message when the changed text of a clip can not be saved -->
+    <string name="clipboard_edit_clip_invalid">The text is empty, or another clip has this text already</string>
+    <!-- Clipboard panel: action for a folder -->
+    <string name="clipboard_folder_rename">Rename folder</string>
+    <!-- Clipboard panel: action for a folder -->
+    <string name="clipboard_folder_delete">Delete folder</string>
+    <!-- Clipboard panel: question before a folder is deleted, with the folder name -->
+    <string name="clipboard_folder_delete_question">Delete \"%s\"? Its clips are kept.</string>
+    <!-- Clipboard panel: shown after a clip was swiped away, with an undo action -->
+    <string name="clipboard_clip_deleted">Clip deleted</string>
+    <!-- Clipboard panel: message when an action failed -->
+    <string name="clipboard_action_failed">That did not work</string>
+    <!-- Clipboard panel: message when the selected clips are too long to copy at once -->
+    <string name="clipboard_copy_too_long">Too much text to copy at once</string>
     <!-- Clipboard panel: shown instead of the list when the search finds no clip -->
     <string name="clipboard_no_results">No clips found</string>
     <!-- Clipboard panel: closes the search, the text input or the selection -->
@@ -254,6 +272,12 @@ Import adds the clips you don\'t have yet and moves clips into the folders given
     <string name="clipboard_export">Export</string>
     <!-- Button for importing clipboard history from a file -->
     <string name="clipboard_import">Import</string>
+    <!-- Message of the dialog asking which clips to export -->
+    <string name="clipboard_export_choice_message">Export all text clips, or only the clips that are in no folder yet? The smaller file is easier for an AI assistant to sort.</string>
+    <!-- Button: export all clips -->
+    <string name="clipboard_export_all">All clips</string>
+    <!-- Button: export only the clips that are in no folder -->
+    <string name="clipboard_export_unfiled">Only unfiled</string>
     <!-- Message after exporting the clipboard history, with the number of clips -->
     <string name="clipboard_export_done">Exported %d clips</string>
     <!-- Message after importing clipboard history, with the number of added clips, of clips moved to a folder, and of clips that were not changed -->
@@ -905,8 +929,8 @@ New dictionary:
 \n► Hold shift or symbol key, press one or more keys, and then release shift or symbol key to return to the previous keyboard. &lt;br&gt; &lt;br&gt;
 \n► Long-press a suggestion in the suggestion strip to show more suggestions, and a delete button to remove this suggestion. &lt;br&gt; &lt;br&gt;
 \n► Swipe up from a suggestion to open more suggestions, and release on the suggestion to select it. &lt;br&gt; &lt;br&gt;
-\n► Long-press an entry in the clipboard history to select entries (keep the finger down and drag to select more), then pin, move to a folder or copy all of them (keep pinned entries until you unpin). &lt;br&gt; &lt;br&gt;
-\n► Swipe left in clipboard view to remove an entry (except when it\'s pinned) &lt;br&gt; &lt;br&gt;
+\n► Long-press an entry in the clipboard history to select entries (keep the finger down and drag to select more), then edit, paste, pin, move to a folder or copy all of them (keep pinned entries until you unpin). &lt;br&gt; &lt;br&gt;
+\n► Swipe left in clipboard view to remove an entry (except when it\'s pinned), it can be brought back for a few seconds &lt;br&gt; &lt;br&gt;
 \n► Swipe right in clipboard view to pin or unpin an entry, it keeps its date. &lt;br&gt; &lt;br&gt;
 \n► Select text and press shift to switch between uppercase, lowercase and capitalize words. &lt;br&gt; &lt;br&gt;
 \n► You can add dictionaries by opening them in a file explorer: &lt;br&gt;

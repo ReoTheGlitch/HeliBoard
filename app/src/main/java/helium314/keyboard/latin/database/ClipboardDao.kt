@@ -157,7 +157,7 @@ class ClipboardDao private constructor(private val db: Database) {
         entries.forEach { it.isPinned = pinned }
         cache.sort()
         val cv = ContentValues(1).apply { put(COLUMN_PINNED, pinned) }
-        db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
+        updateRows(entries, cv)
     }
 
     fun togglePinned(id: Long) = synchronized(this) {
@@ -216,7 +216,59 @@ class ClipboardDao private constructor(private val db: Database) {
         if (entries.isEmpty()) return@synchronized
         entries.forEach { it.folderId = folderId }
         val cv = ContentValues(1).apply { put(COLUMN_FOLDER_ID, folderId) }
-        db.writableDatabase.update(TABLE, cv, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
+        updateRows(entries, cv)
+    }
+
+    // one transaction, so many rows are written at once
+    private fun updateRows(entries: List<ClipboardHistoryEntry>, cv: ContentValues) {
+        val database = db.writableDatabase
+        database.beginTransaction()
+        try {
+            entries.chunked(500).forEach { chunk ->
+                database.update(TABLE, cv, "$COLUMN_ID IN (${chunk.joinToString(",") { it.id.toString() }})", null)
+            }
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+    }
+
+    /** removes the folder, its clips are kept and are in no folder then */
+    fun deleteFolder(id: Long): Boolean = synchronized(this) {
+        val folder = folders.firstOrNull { it.id == id } ?: return@synchronized false
+        val database = db.writableDatabase
+        database.beginTransaction()
+        try {
+            val cv = ContentValues(1).apply { putNull(COLUMN_FOLDER_ID) }
+            database.update(TABLE, cv, "$COLUMN_FOLDER_ID = $id", null)
+            database.delete(FOLDER_TABLE, "$COLUMN_ID = $id", null)
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+        cache.forEach { if (it.folderId == id) it.folderId = null }
+        folders.remove(folder)
+        true
+    }
+
+    /**
+     * changes the text of a text clip, date, pin and folder are kept.
+     * Returns false if the text is empty or another clip has this text already.
+     */
+    fun updateClipText(id: Long, text: String): Boolean = synchronized(this) {
+        val index = cache.indexOfFirst { it.id == id }
+        if (index < 0 || text.isEmpty()) return@synchronized false
+        val old = cache[index]
+        if (old.filename != null) return@synchronized false
+        if (old.text == text) return@synchronized true
+        if (cache.any { it.id != id && it.text == text }) return@synchronized false
+        val cv = ContentValues(1).apply { put(COLUMN_TEXT, text) }
+        db.writableDatabase.update(TABLE, cv, "$COLUMN_ID = $id", null)
+        // entries are not changed in place because the text of an entry is fixed, the list position stays the same
+        cache[index] = ClipboardHistoryEntry(old.id, old.timeStamp, old.isPinned, text, null, null, old.folderId)
+        if (Looper.myLooper() == Looper.getMainLooper()) listener?.onClipMoved(index, index)
+        else Handler(Looper.getMainLooper()).post { listener?.onClipInserted(0) }
+        true
     }
 
     /** returns the folder with this name (ignoring case), or creates it. Used when restoring or importing. */

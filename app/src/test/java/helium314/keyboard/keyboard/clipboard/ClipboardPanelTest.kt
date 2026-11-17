@@ -18,6 +18,7 @@ import helium314.keyboard.keyboard.KeyboardSwitcher
 import helium314.keyboard.latin.LatinIME
 import helium314.keyboard.latin.R
 import helium314.keyboard.latin.database.ClipboardDao
+import helium314.keyboard.latin.database.Database
 import helium314.keyboard.keyboard.KeyboardTheme
 import helium314.keyboard.latin.settings.Settings
 import helium314.keyboard.latin.utils.prefs
@@ -39,6 +40,11 @@ import kotlin.test.assertTrue
 @Config(shadows = [ShadowInputMethodService::class], qualifiers = "w360dp-h760dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ClipboardPanelTest {
+    // other tests in the same process may have filled the history, start with an empty one (before the keyboard is created)
+    @Suppress("unused")
+    private val historyReset = listOf(ClipboardDao::class.java, Database::class.java).forEach {
+        it.getDeclaredField("instance").apply { isAccessible = true }.set(null, null)
+    }
     private val latinIME = Robolectric.setupService(LatinIME::class.java)
     private val keyboardSwitcher = KeyboardSwitcher.getInstance()
     private val dao = ClipboardDao.getInstance(latinIME)!!
@@ -64,7 +70,7 @@ class ClipboardPanelTest {
     private fun labels(view: View, out: MutableList<Pair<String, View>> = mutableListOf()): List<Pair<String, View>> {
         if (view.isShown) {
             if (view is TextView) out.add(view.text.toString() to view)
-            else view.contentDescription?.let { out.add(it.toString() to view) }
+            view.contentDescription?.let { out.add(it.toString() to view) }
         }
         if (view is ViewGroup) for (i in 0 until view.childCount) labels(view.getChildAt(i), out)
         return out
@@ -144,7 +150,7 @@ class ClipboardPanelTest {
         screenshot("2-selection")
 
         // all selection buttons fit in the bar
-        for (label in listOf("Close", "Select all", "Pin", "Move to folder", "Copy all")) {
+        for (label in listOf("Close", "Select all", "Pin", "Move to folder", "Copy all", "Paste all")) {
             val b = button(bar, label)
             val location = IntArray(2).also { b.getLocationInWindow(it) }
             val barLocation = IntArray(2).also { bar.getLocationInWindow(it) }
@@ -173,7 +179,7 @@ class ClipboardPanelTest {
         assertFalse(root.findViewById<View>(R.id.bottom_row_keyboard).isVisible)
         "apple".forEach { click(miniKeyboard, it.toString()) }
         click(miniKeyboard, "␣")
-        click(miniKeyboard, "123")
+        click(miniKeyboard, "?123")
         click(miniKeyboard, "7")
         assertEquals(0, list.adapter!!.itemCount) // "apple 7" is in no clip
         assertFalse(hasButton(bar, "Select all"))
@@ -181,7 +187,7 @@ class ClipboardPanelTest {
         screenshot("3b-no-results")
         click(miniKeyboard, "⌫")
         click(miniKeyboard, "⌫")
-        click(miniKeyboard, "123")
+        click(miniKeyboard, "ABC")
         assertTrue(hasButton(miniKeyboard, "q"))
         screenshot("3-search")
         assertEquals(setOf("apple juice", "apple pie"), shownClipTexts().toSet())
@@ -211,6 +217,58 @@ class ClipboardPanelTest {
         idle()
         assertEquals("clip number 39", ShadowInputMethodService.text)
         screenshot("5-pinned")
+
+        // paste two selected clips, one per line
+        ShadowInputMethodService.reset()
+        assertTrue(list.getChildAt(1).performLongClick())
+        idle()
+        assertTrue(hasButton(bar, "Edit clip")) // one text clip is selected
+        assertTrue(list.getChildAt(2).performClick())
+        idle()
+        assertFalse(hasButton(bar, "Edit clip"))
+        click(bar, "Paste all")
+        assertEquals("clip number 39\nclip number 38", ShadowInputMethodService.text)
+        assertTrue(hasButton(bar, "Search")) // the selection is closed
+
+        // swipe a clip away (the list calls this), undo brings it back
+        val adapter = list.adapter as ClipboardAdapter
+        adapter.removeEntryAt(1)
+        idle()
+        assertTrue(hasButton(bar, "Clip deleted"))
+        assertEquals(41, adapter.itemCount)
+        assertEquals(42, dao.getAll().size) // still in the history while undo is possible
+        screenshot("5b-undo")
+        click(bar, "Undo")
+        assertEquals(42, adapter.itemCount)
+        assertEquals("clip number 39", shownClipTexts()[1])
+        // without undo, the clip is removed when the bar is closed
+        adapter.removeEntryAt(1)
+        idle()
+        click(bar, "Close")
+        assertEquals(41, dao.getAll().size)
+        assertFalse(dao.getAll().any { it.text == "clip number 39" })
+
+        // folders: type a name with capital letter and emoticon, then delete the folder, its clips are kept
+        click(bar, "New folder")
+        click(miniKeyboard, "⇧")
+        click(miniKeyboard, "F")
+        click(miniKeyboard, "u")
+        click(miniKeyboard, "n")
+        click(miniKeyboard, "␣")
+        click(miniKeyboard, ":-)")
+        screenshot("5c-emoticons")
+        click(miniKeyboard, "\\o/")
+        click(bar, "OK")
+        assertTrue(dao.getFolders().any { it.name == "Fun \\o/" }, "folders: ${dao.getFolders().map { it.name }}")
+        assertTrue(button(bar, "Work").performLongClick())
+        idle()
+        screenshot("5d-folder-actions")
+        click(bar, "Delete folder")
+        click(bar, "Delete")
+        assertFalse(dao.getFolders().any { it.name == "Work" })
+        assertEquals(41, dao.getAll().size)
+        assertTrue(dao.getAll().none { it.folderId == work.id })
+        click(bar, "All")
 
         // the panel again in a dark theme with key borders, for the screenshots
         latinIME.prefs().edit().putString(Settings.PREF_THEME_COLORS, KeyboardTheme.THEME_DARK)

@@ -41,7 +41,10 @@ class ClipboardFolderBar @JvmOverloads constructor(
 
     var onFilterSelected: ((FolderFilter) -> Unit)? = null
     var onNewFolder: (() -> Unit)? = null
-    var onRenameFolder: ((ClipboardFolder) -> Unit)? = null
+    /** long-press on a folder chip, for renaming or deleting the folder */
+    var onFolderLongClick: ((ClipboardFolder) -> Unit)? = null
+    var onSelectionPaste: (() -> Unit)? = null
+    var onSelectionEdit: (() -> Unit)? = null
     var onConfirmInput: (() -> Unit)? = null
     var onCancelInput: (() -> Unit)? = null
     var onSearch: (() -> Unit)? = null
@@ -97,6 +100,22 @@ class ClipboardFolderBar @JvmOverloads constructor(
     private val pinButton = iconButton(R.drawable.ic_clipboard_pin_lxx, R.string.clipboard_selection_pin) { onSelectionPin?.invoke() }
     private val moveButton = iconButton(R.drawable.ic_clipboard_folder_move, R.string.clipboard_selection_move) { onSelectionMove?.invoke() }
     private val copyButton = iconButton(R.drawable.sym_keyboard_copy, R.string.clipboard_selection_copy) { onSelectionCopy?.invoke() }
+    private val pasteButton = iconButton(R.drawable.sym_keyboard_paste, R.string.clipboard_selection_paste) { onSelectionPaste?.invoke() }
+    private val editButton = iconButton(R.drawable.ic_edit, R.string.clipboard_edit_clip) { onSelectionEdit?.invoke() }
+    // the actions scroll if they do not fit, close and count always stay visible
+    private val selectionActions = LinearLayout(context).apply { orientation = HORIZONTAL }
+
+    // a text with some actions, used for the folder actions, questions and undo
+    private val actionRow = LinearLayout(context).apply { orientation = HORIZONTAL; isGone = true }
+    private val actionLabel = TextView(context).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        setSingleLine(true)
+        ellipsize = TextUtils.TruncateAt.END
+    }
+    private val actionButtons = LinearLayout(context).apply { orientation = HORIZONTAL }
+
+    /** an action shown by [showActions] */
+    class BarAction(val iconId: Int, val descriptionId: Int, val onClick: () -> Unit)
     private val moveLabel = TextView(context).apply {
         gravity = Gravity.CENTER_VERTICAL
         setSingleLine(true)
@@ -105,7 +124,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
     }
 
     private val iconButtons get() = listOf(searchButton, selectResultsButton, confirmButton, cancelButton,
-        closeSelectionButton, allButton, pinButton, moveButton, copyButton)
+        closeSelectionButton, allButton, pinButton, moveButton, copyButton, pasteButton, editButton)
 
     init {
         orientation = HORIZONTAL
@@ -123,9 +142,18 @@ class ClipboardFolderBar @JvmOverloads constructor(
         addView(confirmButton)
         addView(cancelButton)
         selectionRow.addView(closeSelectionButton)
-        selectionRow.addView(selectionCount, LayoutParams(0, match, 1f).apply { marginStart = chipPadding / 2 })
-        listOf(allButton, pinButton, moveButton, copyButton).forEach { selectionRow.addView(it) }
+        selectionRow.addView(selectionCount, LayoutParams(wrap, match).apply { marginStart = chipPadding / 3; marginEnd = chipPadding / 2 })
+        listOf(allButton, editButton, pinButton, moveButton, copyButton, pasteButton).forEach { selectionActions.addView(it) }
+        val actionScroll = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            isFillViewport = true
+            addView(selectionActions.apply { gravity = Gravity.END }, LayoutParams(wrap, match))
+        }
+        selectionRow.addView(actionScroll, LayoutParams(0, match, 1f))
         addView(selectionRow, LayoutParams(0, match, 1f))
+        actionRow.addView(actionLabel, LayoutParams(0, match, 1f).apply { marginStart = chipPadding })
+        actionRow.addView(actionButtons, LayoutParams(wrap, match))
+        addView(actionRow, LayoutParams(0, match, 1f))
     }
 
     @Suppress("UNUSED_PARAMETER") // the key background is not used any more, chips have their own shape
@@ -136,7 +164,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         val colors = Settings.getValues().mColors
         accentColor = colors.get(ColorType.ACTION_KEY_BACKGROUND)
         onAccentColor = colors.get(ColorType.ACTION_KEY_ICON)
-        listOf(inputLabel, selectionCount, moveLabel).forEach {
+        listOf(inputLabel, selectionCount, moveLabel, actionLabel).forEach {
             it.setTextColor(textColor)
             it.typeface = typeface
             it.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
@@ -170,7 +198,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
                 onFilterSelected?.invoke(FolderFilter.Folder(folder.id))
             }
             folderChip.setOnLongClickListener {
-                onRenameFolder?.invoke(folder)
+                onFolderLongClick?.invoke(folder)
                 true
             }
             chipRow.addView(folderChip)
@@ -206,13 +234,28 @@ class ClipboardFolderBar @JvmOverloads constructor(
         confirmButton.alpha = if (confirmEnabled) 1f else 0.4f
     }
 
-    /** shows the selection actions instead of the chips */
-    fun showSelection(count: Int) {
+    /** shows the selection actions instead of the chips. [canEdit] shows the edit action (one text clip is selected). */
+    fun showSelection(count: Int, canEdit: Boolean) {
         show(selection = true)
-        selectionCount.text = context.getString(R.string.clipboard_selected_count, count)
-        listOf(pinButton, moveButton, copyButton).forEach {
+        selectionCount.text = count.toString()
+        selectionCount.contentDescription = context.getString(R.string.clipboard_selected_count, count)
+        editButton.isVisible = canEdit
+        listOf(pinButton, moveButton, copyButton, pasteButton).forEach {
             it.alpha = if (count > 0) 1f else 0.4f
             it.isEnabled = count > 0
+        }
+    }
+
+    /** shows [label] with [actions] and the close button, instead of the chips */
+    fun showActions(label: String, actions: List<BarAction>) {
+        show(actions = true)
+        actionLabel.text = label
+        actionButtons.removeAllViews()
+        actions.forEach { action ->
+            actionButtons.addView(iconButton(action.iconId, action.descriptionId, action.onClick).apply {
+                setColorFilter(textColor)
+                background = pressedBackground()
+            })
         }
     }
 
@@ -227,11 +270,13 @@ class ClipboardFolderBar @JvmOverloads constructor(
         chipScroll.scrollTo(0, 0)
     }
 
-    private fun show(chips: Boolean = false, search: Boolean = false, input: Boolean = false, selection: Boolean = false, moveTargets: Boolean = false) {
+    private fun show(chips: Boolean = false, search: Boolean = false, input: Boolean = false, selection: Boolean = false,
+                     moveTargets: Boolean = false, actions: Boolean = false) {
+        actionRow.isVisible = actions
         chipScroll.isVisible = chips
         searchButton.isVisible = search
         inputField.isVisible = input
-        cancelButton.isVisible = input || moveTargets
+        cancelButton.isVisible = input || moveTargets || actions
         moveLabel.isVisible = moveTargets
         selectionRow.isVisible = selection
         if (!input) {
