@@ -4,6 +4,7 @@ package helium314.keyboard.keyboard.clipboard
 
 import android.annotation.SuppressLint
 import android.graphics.Typeface
+import android.text.format.DateUtils
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -134,6 +135,7 @@ class ClipboardAdapter(
         private val pinnedIconView: ImageView
         private val contentTextView: TextView
         private val contentImageView: ImageView
+        private val dateView: TextView
 
         init {
             view.apply {
@@ -154,6 +156,11 @@ class ClipboardAdapter(
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, itemTextSize)
             }
             contentImageView = view.findViewById(R.id.clipboard_entry_image_content)
+            dateView = view.findViewById<TextView>(R.id.clipboard_entry_date).apply {
+                typeface = itemTypeFace
+                setTextColor(itemTextColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_PX, itemTextSize * 0.7f)
+            }
             clipboardLayoutParams.setItemProperties(view)
             val colors = Settings.getValues().mColors
             colors.setColor(pinnedIconView, ColorType.CLIPBOARD_PIN)
@@ -167,6 +174,8 @@ class ClipboardAdapter(
             } else {
                 contentTextView.text = historyEntry.text?.take(1000) // truncate displayed text for performance reasons
             }
+            dateView.text = DateUtils.formatDateTime(itemView.context, historyEntry.timeStamp,
+                DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH)
             pinnedIconView.visibility = if (historyEntry.isPinned) View.VISIBLE else View.GONE
             contentImageView.visibility = if (historyEntry.filename != null) View.VISIBLE else View.GONE
             contentTextView.visibility = if (contentTextView.text.isNullOrEmpty()) View.GONE else View.VISIBLE
