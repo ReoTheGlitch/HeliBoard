@@ -119,6 +119,14 @@ class ClipboardAdapter(
         notifyItemRemoved(position)
     }
 
+    /** pins or unpins a clip after it was swiped, the clip stays in the list */
+    fun togglePinnedAt(position: Int) {
+        val entry = items.getOrNull(position) ?: return
+        clipboardHistoryManager?.toggleClipPinned(entry.id) // the history listener updates the shown list
+        val newPosition = positionOf(entry.id)
+        if (newPosition >= 0) notifyItemChanged(newPosition) // brings the swiped view back, with the pin icon updated
+    }
+
     inner class ViewHolder(
             view: View
     ) : RecyclerView.ViewHolder(view), View.OnClickListener, View.OnTouchListener, View.OnLongClickListener {
