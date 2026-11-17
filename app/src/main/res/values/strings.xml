@@ -236,6 +236,20 @@
     <string name="clipboard_selection_copy">Copy all</string>
     <!-- Clipboard panel: folder choice when moving clips, moves them out of their folder -->
     <string name="clipboard_selection_no_folder">No folder</string>
+    <!-- Preferences item for saving the clipboard history to a file, or adding clips from such a file -->
+    <string name="clipboard_export_import">Export or import clipboard history</string>
+    <!-- Message of the dialog for exporting or importing the clipboard history -->
+    <string name="clipboard_export_import_message">Export saves all text clips and folders to a JSON file, images are not saved. Import adds the clips of such a file to your history. Clips you already have are skipped, nothing is removed.</string>
+    <!-- Button for exporting the clipboard history to a file -->
+    <string name="clipboard_export">Export</string>
+    <!-- Button for importing clipboard history from a file -->
+    <string name="clipboard_import">Import</string>
+    <!-- Message after exporting the clipboard history, with the number of clips -->
+    <string name="clipboard_export_done">Exported %d clips</string>
+    <!-- Message after importing clipboard history, with the number of added clips and the number of skipped clips -->
+    <string name="clipboard_import_done">Added %1$d clips, skipped %2$d that you already have</string>
+    <!-- Message when the clipboard history could not be written to the file -->
+    <string name="clipboard_export_error">Cannot write file</string>
     <!-- Preferences item for showing pinned clipboard items first -->
     <string name="clipboard_history_pinned_first">Show pinned items on top</string>
     <!-- Preferences item for extending the clipboard history to files (images or others) -->

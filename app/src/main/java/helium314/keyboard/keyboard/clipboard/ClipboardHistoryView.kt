@@ -316,6 +316,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
     override fun onClipMoved(oldPosition: Int, newPosition: Int) {
         val movedId = clipboardHistoryManager.getHistoryEntry(newPosition)?.id
         refreshList(scrollToId = if (newPosition < oldPosition) movedId else null)
+        movedId?.let { clipboardAdapter.entryChanged(it) }
     }
 
     override fun onSharedPreferenceChanged(prefs: SharedPreferences?, key: String?) {

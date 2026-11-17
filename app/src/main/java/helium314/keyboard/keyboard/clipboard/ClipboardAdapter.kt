@@ -123,9 +123,14 @@ class ClipboardAdapter(
     /** pins or unpins a clip after it was swiped, the clip stays in the list */
     fun togglePinnedAt(position: Int) {
         val entry = items.getOrNull(position) ?: return
-        clipboardHistoryManager?.toggleClipPinned(entry.id) // the history listener updates the shown list
-        val newPosition = positionOf(entry.id)
-        if (newPosition >= 0) notifyItemChanged(newPosition) // brings the swiped view back, with the pin icon updated
+        // the history listener updates the shown list and calls entryChanged, which brings the swiped view back
+        clipboardHistoryManager?.toggleClipPinned(entry.id)
+    }
+
+    /** shows the clip again after its pin state or date changed */
+    fun entryChanged(id: Long) {
+        val position = positionOf(id)
+        if (position >= 0) notifyItemChanged(position)
     }
 
     inner class ViewHolder(

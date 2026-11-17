@@ -228,6 +228,41 @@ class ClipboardDao private constructor(private val db: Database) {
         return folders.firstOrNull { it.name.equals(cleanName, ignoreCase = true) } ?: createFolder(cleanName)
     }
 
+    /**
+     * Adds the folders and clips of an export to the history. Nothing is removed or changed:
+     * folders are matched by name, and a clip is skipped if its text is in the history already.
+     * Returns the number of added clips.
+     */
+    fun importClips(export: ClipboardExport): Int = synchronized(this) {
+        export.folders.forEach { getOrCreateFolder(it) }
+        val knownTexts = cache.mapNotNullTo(HashSet()) { it.text }
+        val added = mutableListOf<ClipboardHistoryEntry>()
+        val database = db.writableDatabase
+        database.beginTransaction()
+        try {
+            for (clip in export.clips) {
+                if (clip.text.isEmpty() || !knownTexts.add(clip.text)) continue
+                val folderId = clip.folder?.let { getOrCreateFolder(it)?.id }
+                val cv = ContentValues(4)
+                cv.put(COLUMN_TIMESTAMP, clip.timestamp)
+                cv.put(COLUMN_PINNED, clip.pinned)
+                cv.put(COLUMN_TEXT, clip.text)
+                cv.put(COLUMN_FOLDER_ID, folderId)
+                val rowId = database.insert(TABLE, null, cv)
+                if (rowId == -1L) continue
+                added.add(ClipboardHistoryEntry(rowId, clip.timestamp, clip.pinned, clip.text, null, null, folderId))
+            }
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+        if (added.isEmpty()) return@synchronized 0
+        cache.addAll(added)
+        cache.sort()
+        listener?.onClipInserted(cache.indexOf(added.first())) // the clipboard view reloads its list
+        added.size
+    }
+
     private fun cleanFolderName(name: String): String? =
         name.trim().replace(Regex("\\s+"), " ").take(MAX_FOLDER_NAME_LENGTH).trim().ifEmpty { null }
 
