@@ -8,6 +8,8 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
+import helium314.keyboard.latin.common.ColorType
+import helium314.keyboard.latin.settings.Settings
 
 /**
  * Small keyboard inside the clipboard panel, used to type folder names and the search text.
@@ -25,21 +27,37 @@ class ClipboardMiniKeyboard @JvmOverloads constructor(
     private val keys = mutableListOf<TextView>()
     private val margin = (2 * context.resources.displayMetrics.density).toInt()
 
+    private val topRowKeys = mutableListOf<TextView>() // show letters or digits
+    private var digitsShown = false
+
     init {
         orientation = VERTICAL
-        for (row in ROWS) {
+        ROWS.forEachIndexed { index, row ->
             val rowView = LinearLayout(context).apply { orientation = HORIZONTAL }
-            row.forEach { label -> rowView.addView(key(label, 1f)) }
-            if (row == ROWS[2]) rowView.addView(key(SPACE_KEY, 2f))
-            if (row == ROWS[3]) rowView.addView(key(BACKSPACE_KEY, 1.5f))
+            if (index == 2) rowView.addView(key(DIGITS_KEY, 1.5f))
+            row.forEach { label -> rowView.addView(key(label, 1f).also { if (index == 0) topRowKeys.add(it) }) }
+            if (index == 1) rowView.addView(key(SPACE_KEY, 2f))
+            if (index == 2) rowView.addView(key(BACKSPACE_KEY, 1.5f))
             rows.add(rowView)
             addView(rowView)
         }
     }
 
+    /** the top row shows the letters again */
+    fun reset() {
+        if (digitsShown) toggleDigits()
+    }
+
+    private fun toggleDigits() {
+        digitsShown = !digitsShown
+        val labels = if (digitsShown) DIGITS else ROWS[0]
+        topRowKeys.forEachIndexed { index, key -> key.text = labels[index] }
+    }
+
     fun setStyle(keyBackgroundId: Int, textColor: Int, typeface: Typeface?, textSize: Float, rowHeight: Int) {
         keys.forEach {
             it.setBackgroundResource(keyBackgroundId)
+            Settings.getValues().mColors.setBackground(it, ColorType.KEY_BACKGROUND)
             it.setTextColor(textColor)
             it.typeface = typeface
             it.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
@@ -50,8 +68,7 @@ class ClipboardMiniKeyboard @JvmOverloads constructor(
     }
 
     private fun key(label: String, weight: Float): TextView = TextView(context).apply {
-        text = label
-        tag = label
+        text = if (label == SPACE_KEY) SPACE_LABEL else label
         gravity = Gravity.CENTER
         setSingleLine(true)
         isClickable = true
@@ -59,15 +76,21 @@ class ClipboardMiniKeyboard @JvmOverloads constructor(
         layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, weight).apply {
             setMargins(margin, margin, margin, margin)
         }
-        setOnClickListener { onKey?.invoke(label) }
+        setOnClickListener {
+            if (label == DIGITS_KEY) toggleDigits()
+            else onKey?.invoke(if (label == SPACE_KEY) SPACE_KEY else text.toString())
+        }
         keys.add(this)
     }
 
     companion object {
         const val SPACE_KEY = " "
         const val BACKSPACE_KEY = "⌫"
+        private const val DIGITS_KEY = "123"
+        private const val SPACE_LABEL = "␣" // shown on the space key, so it is visible in themes without key borders
+        const val ROW_COUNT = 3
+        private val DIGITS = "1234567890".map { it.toString() }
         private val ROWS = listOf(
-            "1234567890".map { it.toString() },
             "qwertyuiop".map { it.toString() },
             "asdfghjkl".map { it.toString() },
             "zxcvbnm".map { it.toString() },

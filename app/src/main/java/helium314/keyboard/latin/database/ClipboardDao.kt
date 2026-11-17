@@ -5,6 +5,8 @@ import android.content.ClipDescription
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
@@ -140,6 +142,9 @@ class ClipboardDao private constructor(private val db: Database) {
 
     fun getAll(): List<ClipboardHistoryEntry> = cache
 
+    /** copy of the list, safe to use from a background thread */
+    fun snapshot(): List<ClipboardHistoryEntry> = synchronized(this) { cache.toList() }
+
     fun count() = cache.size
 
     fun sort() = cache.sort()
@@ -259,7 +264,9 @@ class ClipboardDao private constructor(private val db: Database) {
         if (added.isEmpty()) return@synchronized 0
         cache.addAll(added)
         cache.sort()
-        listener?.onClipInserted(cache.indexOf(added.first())) // the clipboard view reloads its list
+        // the clipboard view reloads its list, on the main thread because import runs in the background
+        val position = cache.indexOf(added.first())
+        Handler(Looper.getMainLooper()).post { listener?.onClipInserted(position) }
         added.size
     }
 

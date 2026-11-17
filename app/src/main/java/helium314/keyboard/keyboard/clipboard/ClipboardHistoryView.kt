@@ -50,7 +50,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
     ClipboardDao.Listener, OnKeyEventListener,
     View.OnLongClickListener, SharedPreferences.OnSharedPreferenceChangeListener {
 
-    private val clipboardLayoutParams = ClipboardLayoutParams(context)
+    private var clipboardLayoutParams = ClipboardLayoutParams(context)
     private val pinIconId: Int
     private val keyBackgroundId: Int
 
@@ -208,6 +208,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
     ) {
         clipboardHistoryManager = historyManager
         initialize()
+        // the keyboard size may have changed since the view was created (the adapter keeps the old gaps, that's ok)
+        clipboardLayoutParams = ClipboardLayoutParams(context)
+        folderBar.layoutParams.height = clipboardLayoutParams.headerHeight
         setupToolbarKeys()
         historyManager.prepareClipboardHistory()
         historyManager.setHistoryChangeListener(this)
@@ -238,8 +241,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
             adapter = clipboardAdapter
             val keyboardWidth = ResourceUtils.getKeyboardWidth(context, settings.current)
             layoutParams.width = keyboardWidth
-            // new ClipboardLayoutParams means ClipboardAdapter has wrong gaps, but that's ok (only relevant when resizing floating keyboard)
-            ClipboardLayoutParams(context).setListProperties(this)
+            clipboardLayoutParams.setListProperties(this)
 
             // set side padding
             val keyboardAttr = context.obtainStyledAttributes(
@@ -340,6 +342,13 @@ class ClipboardHistoryView @JvmOverloads constructor(
         if (!animate) clipboardRecyclerView.scrollToPosition(0)
         val position = scrollToId?.let { clipboardAdapter.positionOf(it) } ?: -1
         if (position >= 0) clipboardRecyclerView.smoothScrollToPosition(position)
+        // clips that are gone can't stay selected, and the search line shows "All" only if there are results
+        if (selectionActive && selectedIds.retainAll(clipboardAdapter.shownIds().toSet())) {
+            selectedBeforeDrag = selectedIds.toSet()
+            updateSelectionUi()
+        } else if (!selectionActive && searchQuery != null && inputMode == InputMode.NONE) {
+            updateInputState()
+        }
     }
 
     private fun refreshFolderBar() {
@@ -374,6 +383,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
 
     private fun startInput(mode: InputMode, initialText: String) {
         inputMode = mode
+        miniKeyboard.reset()
         inputText.setLength(0)
         inputText.append(initialText)
         if (mode == InputMode.SEARCH) {

@@ -37,7 +37,7 @@ fun ClipboardExportImportPreference(setting: Setting) {
         scope.launch(Dispatchers.IO) {
             message = try {
                 val dao = ClipboardDao.getInstance(ctx)!!
-                val export = ClipboardJson.toExport(dao.getAll().toList(), dao.getFolders())
+                val export = ClipboardJson.toExport(dao.snapshot(), dao.getFolders())
                 ctx.contentResolver.openOutputStream(uri)!!.use { it.write(ClipboardJson.encode(export).toByteArray()) }
                 ctx.getString(R.string.clipboard_export_done, export.clips.size)
             } catch (e: Throwable) {

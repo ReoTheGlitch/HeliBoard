@@ -45,8 +45,8 @@ class ClipboardLayoutParams(ctx: Context) {
         // height calculation is not good enough, probably also because keyboard top padding might be off by a pixel (see KeyboardParser)
         val offset = 1.25f * res.displayMetrics.density * sv.mKeyboardHeightScale
         listHeight = defaultKeyboardHeight - headerHeight - bottomRowKeyboardHeight - bottomPadding + offset.toInt()
-        // while typing, the input keyboard (4 rows) takes the place of the bottom row
-        listHeightWithInput = defaultKeyboardHeight - headerHeight - 4 * inputRowHeight - bottomPadding + offset.toInt()
+        // while typing, the input keyboard takes the place of the bottom row
+        listHeightWithInput = defaultKeyboardHeight - headerHeight - ClipboardMiniKeyboard.ROW_COUNT * inputRowHeight - bottomPadding + offset.toInt()
     }
 
     fun setListProperties(recycler: RecyclerView, inputKeyboardShown: Boolean = false) {

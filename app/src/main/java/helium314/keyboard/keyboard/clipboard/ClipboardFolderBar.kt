@@ -3,6 +3,7 @@ package helium314.keyboard.keyboard.clipboard
 
 import android.content.Context
 import android.graphics.Typeface
+import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
@@ -13,7 +14,9 @@ import android.widget.TextView
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import helium314.keyboard.latin.R
+import helium314.keyboard.latin.common.ColorType
 import helium314.keyboard.latin.database.ClipboardFolder
+import helium314.keyboard.latin.settings.Settings
 
 /**
  * Bar above the clipboard list. Shows the folder chips, or the text field line while a name is typed.
@@ -53,6 +56,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
     private val inputLabel = TextView(context).apply {
         gravity = Gravity.CENTER_VERTICAL
         setSingleLine(true)
+        setPadding(padding, 0, padding, 0)
         isGone = true
         setOnClickListener { onInputClick?.invoke() }
     }
@@ -67,7 +71,11 @@ class ClipboardFolderBar @JvmOverloads constructor(
     private val selectionCount = TextView(context).apply {
         gravity = Gravity.CENTER_VERTICAL
         setSingleLine(true)
+        ellipsize = TextUtils.TruncateAt.END
+        setPadding(padding, 0, padding, 0)
     }
+    // the actions scroll if they do not fit, the count and the close button always stay visible
+    private val selectionActions = LinearLayout(context).apply { orientation = HORIZONTAL }
     private val allButton = keyText(context.getString(R.string.clipboard_selection_all)).apply { setOnClickListener { onSelectAll?.invoke() } }
     private val pinButton = keyText(context.getString(R.string.clipboard_selection_pin)).apply { setOnClickListener { onSelectionPin?.invoke() } }
     private val moveButton = keyText(context.getString(R.string.clipboard_selection_move)).apply { setOnClickListener { onSelectionMove?.invoke() } }
@@ -83,10 +91,16 @@ class ClipboardFolderBar @JvmOverloads constructor(
         addView(selectResultsButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(confirmButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(cancelButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
-        selectionRow.addView(selectionCount, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
-        listOf(allButton, pinButton, moveButton, copyButton, closeSelectionButton).forEach {
-            selectionRow.addView(it, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        selectionRow.addView(selectionCount, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        listOf(allButton, pinButton, moveButton, copyButton).forEach {
+            selectionActions.addView(it, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         }
+        val actionScroll = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(selectionActions, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
+        }
+        selectionRow.addView(actionScroll, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
+        selectionRow.addView(closeSelectionButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT))
         addView(selectionRow, LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
     }
 
@@ -105,8 +119,15 @@ class ClipboardFolderBar @JvmOverloads constructor(
             it.setTextColor(textColor)
             it.typeface = typeface
             it.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
-            it.setBackgroundResource(keyBackgroundId)
+            setKeyBackground(it)
         }
+    }
+
+    // the key background is white and needs the color of the theme
+    private fun setKeyBackground(view: View) {
+        if (keyBackgroundId == 0) return
+        view.setBackgroundResource(keyBackgroundId)
+        Settings.getValues().mColors.setBackground(view, ColorType.KEY_BACKGROUND)
     }
 
     /** shows the folder chips. [selected] is highlighted. */
@@ -202,7 +223,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
         gravity = Gravity.CENTER
         setSingleLine(true)
         setPadding(padding, 0, padding, 0)
-        setBackgroundResource(keyBackgroundId)
+        setKeyBackground(this)
         setTextColor(textColor)
         this.typeface = this@ClipboardFolderBar.typeface
         setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize)
