@@ -80,6 +80,10 @@ class ClipboardHistoryView @JvmOverloads constructor(
 
     private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER, SEARCH }
 
+    companion object {
+        private const val EMPTY_PLACEHOLDER = "¯\\_(ツ)_/¯" // same as in the layout
+    }
+
     init {
         val clipboardViewAttr = context.obtainStyledAttributes(attrs,
                 R.styleable.ClipboardHistoryView, defStyle, R.style.ClipboardHistoryView)
@@ -338,7 +342,10 @@ class ClipboardHistoryView @JvmOverloads constructor(
         val query = searchQuery
         val folder = if (query != null) FolderFilter.All else folderFilter
         val visible = ClipboardListFilter.visible(clipboardHistoryManager.getAllEntries(), folder, query)
+        // the folder of a clip is shown where clips of several folders are listed
+        clipboardAdapter.folderNames = if (folder == FolderFilter.All) clipboardHistoryManager.getFolders().associate { it.id to it.name } else emptyMap()
         clipboardAdapter.submitItems(visible, animate)
+        placeholderView.text = if (query.isNullOrBlank()) EMPTY_PLACEHOLDER else context.getString(R.string.clipboard_no_results)
         if (!animate) clipboardRecyclerView.scrollToPosition(0)
         val position = scrollToId?.let { clipboardAdapter.positionOf(it) } ?: -1
         if (position >= 0) clipboardRecyclerView.smoothScrollToPosition(position)
@@ -369,11 +376,12 @@ class ClipboardHistoryView @JvmOverloads constructor(
             }
             inputShown -> {
                 val hint = context.getString(if (inputMode == InputMode.SEARCH) R.string.clipboard_search_hint else R.string.clipboard_folder_name_hint)
-                folderBar.showInput(text, hint, showConfirm = inputMode != InputMode.SEARCH, confirmEnabled = text.isNotBlank(),
-                    showSelectAll = inputMode == InputMode.SEARCH && clipboardAdapter.itemCount > 0)
+                val isSearch = inputMode == InputMode.SEARCH
+                folderBar.showInput(text, hint, editing = true, isSearch = isSearch, showConfirm = !isSearch, confirmEnabled = text.isNotBlank(),
+                    showSelectAll = isSearch && clipboardAdapter.itemCount > 0)
             }
-            searchQuery != null -> folderBar.showInput(text, context.getString(R.string.clipboard_search_hint), showConfirm = false,
-                confirmEnabled = false, showSelectAll = clipboardAdapter.itemCount > 0)
+            searchQuery != null -> folderBar.showInput(text, context.getString(R.string.clipboard_search_hint), editing = false, isSearch = true,
+                showConfirm = false, confirmEnabled = false, showSelectAll = clipboardAdapter.itemCount > 0)
             else -> refreshFolderBar()
         }
         bottomRowKeyboard.isVisible = !inputShown

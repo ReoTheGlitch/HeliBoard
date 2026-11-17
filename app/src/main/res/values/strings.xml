@@ -227,11 +227,17 @@
     <!-- Clipboard panel: number of selected clips -->
     <string name="clipboard_selected_count">%d selected</string>
     <!-- Clipboard panel: selects all shown clips (the folder or the search results), or unselects them if all are selected -->
-    <string name="clipboard_selection_all">All</string>
+    <string name="clipboard_selection_all">Select all</string>
+    <!-- Clipboard panel: shown instead of the list when the search finds no clip -->
+    <string name="clipboard_no_results">No clips found</string>
+    <!-- Clipboard panel: closes the search, the text input or the selection -->
+    <string name="clipboard_close">Close</string>
+    <!-- Clipboard panel: label before the folders when choosing where to move the selected clips -->
+    <string name="clipboard_move_to">Move to</string>
     <!-- Clipboard panel: action for the selected clips, pins them (or unpins them if all are pinned) -->
     <string name="clipboard_selection_pin">Pin</string>
     <!-- Clipboard panel: action for the selected clips, then choose the folder to move them to -->
-    <string name="clipboard_selection_move">Move</string>
+    <string name="clipboard_selection_move">Move to folder</string>
     <!-- Clipboard panel: action for the selected clips, copies their text joined with new lines -->
     <string name="clipboard_selection_copy">Copy all</string>
     <!-- Clipboard panel: folder choice when moving clips, moves them out of their folder -->

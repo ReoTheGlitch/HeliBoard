@@ -60,16 +60,20 @@ class ClipboardPanelTest {
         bar = root.findViewById(R.id.clipboard_folder_bar)
     }
 
-    private fun texts(view: View, out: MutableList<TextView> = mutableListOf()): List<TextView> {
-        if (view is TextView && view.isShown) out.add(view)
-        if (view is ViewGroup) for (i in 0 until view.childCount) texts(view.getChildAt(i), out)
+    // shown views by their text, or by their description for icon buttons
+    private fun labels(view: View, out: MutableList<Pair<String, View>> = mutableListOf()): List<Pair<String, View>> {
+        if (view.isShown) {
+            if (view is TextView) out.add(view.text.toString() to view)
+            else view.contentDescription?.let { out.add(it.toString() to view) }
+        }
+        if (view is ViewGroup) for (i in 0 until view.childCount) labels(view.getChildAt(i), out)
         return out
     }
 
-    private fun button(parent: View, label: String): TextView =
-        assertNotNull(texts(parent).firstOrNull { it.text.toString() == label }, "no shown button '$label' in ${texts(parent).map { it.text }}")
+    private fun button(parent: View, label: String): View =
+        assertNotNull(labels(parent).firstOrNull { it.first == label }?.second, "no shown button '$label' in ${labels(parent).map { it.first }}")
 
-    private fun hasButton(parent: View, label: String) = texts(parent).any { it.text.toString() == label }
+    private fun hasButton(parent: View, label: String) = labels(parent).any { it.first == label }
 
     private fun click(parent: View, label: String) {
         assertTrue(button(parent, label).performClick())
@@ -112,7 +116,7 @@ class ClipboardPanelTest {
         assertEquals(42, list.adapter!!.itemCount)
         assertEquals("clip number 40", shownClipTexts().first())
         assertTrue(list.getChildAt(0).findViewById<TextView>(R.id.clipboard_entry_date).text.isNotEmpty())
-        assertTrue(hasButton(bar, "All") && hasButton(bar, "Unfiled") && hasButton(bar, "Work") && hasButton(bar, "+"))
+        assertTrue(hasButton(bar, "All") && hasButton(bar, "Unfiled") && hasButton(bar, "Work") && hasButton(bar, "New folder"))
 
         // folder filter
         click(bar, "Work")
@@ -125,22 +129,22 @@ class ClipboardPanelTest {
         val downTime = SystemClock.uptimeMillis()
         touch(MotionEvent.ACTION_DOWN, first.left + 5f, first.top + 5f, downTime)
         assertTrue(first.performLongClick())
-        assertTrue(hasButton(bar, "1 selected"), "bar shows ${texts(bar).map { it.text }}")
+        assertTrue(hasButton(bar, "1 selected"), "bar shows ${labels(bar).map { it.first }}")
         val target = list.getChildAt(3)
         val targetPosition = list.getChildAdapterPosition(target)
         touch(MotionEvent.ACTION_MOVE, target.left + 5f, target.top + 5f, downTime)
-        assertTrue(hasButton(bar, "${targetPosition + 1} selected"), "bar shows ${texts(bar).map { it.text }}")
+        assertTrue(hasButton(bar, "${targetPosition + 1} selected"), "bar shows ${labels(bar).map { it.first }}")
         // dragging back shrinks the range
         val back = list.getChildAt(1)
         touch(MotionEvent.ACTION_MOVE, back.left + 5f, back.top + 5f, downTime)
-        assertTrue(hasButton(bar, "${list.getChildAdapterPosition(back) + 1} selected"), "bar shows ${texts(bar).map { it.text }}")
+        assertTrue(hasButton(bar, "${list.getChildAdapterPosition(back) + 1} selected"), "bar shows ${labels(bar).map { it.first }}")
         touch(MotionEvent.ACTION_UP, back.left + 5f, back.top + 5f, downTime)
         assertTrue(list.getChildAt(0).findViewById<View>(R.id.clipboard_entry_selected_mark).isVisible)
         assertFalse(list.getChildAt(3).findViewById<View>(R.id.clipboard_entry_selected_mark).isVisible)
         screenshot("2-selection")
 
         // all selection buttons fit in the bar
-        for (label in listOf("All", "Pin", "Move", "Copy all", "✕")) {
+        for (label in listOf("Close", "Select all", "Pin", "Move to folder", "Copy all")) {
             val b = button(bar, label)
             val location = IntArray(2).also { b.getLocationInWindow(it) }
             val barLocation = IntArray(2).also { bar.getLocationInWindow(it) }
@@ -155,11 +159,11 @@ class ClipboardPanelTest {
         assertFalse(hasButton(bar, "${list.getChildAdapterPosition(back) + 1} selected"))
 
         // select all, unselect all, close
-        click(bar, "All")
+        click(bar, "Select all")
         assertTrue(hasButton(bar, "42 selected"))
-        click(bar, "All")
+        click(bar, "Select all")
         assertTrue(hasButton(bar, "0 selected"))
-        click(bar, "✕")
+        click(bar, "Close")
         assertTrue(hasButton(bar, "Search"))
 
         // search with the small keyboard, select all results, move them to a folder
@@ -172,22 +176,24 @@ class ClipboardPanelTest {
         click(miniKeyboard, "123")
         click(miniKeyboard, "7")
         assertEquals(0, list.adapter!!.itemCount) // "apple 7" is in no clip
-        assertFalse(hasButton(bar, "All"))
+        assertFalse(hasButton(bar, "Select all"))
+        assertTrue(hasButton(root, "No clips found"))
+        screenshot("3b-no-results")
         click(miniKeyboard, "⌫")
         click(miniKeyboard, "⌫")
         click(miniKeyboard, "123")
         assertTrue(hasButton(miniKeyboard, "q"))
         screenshot("3-search")
         assertEquals(setOf("apple juice", "apple pie"), shownClipTexts().toSet())
-        click(bar, "All")
+        click(bar, "Select all")
         assertTrue(hasButton(bar, "2 selected"))
         assertFalse(miniKeyboard.isVisible)
-        click(bar, "Move")
+        click(bar, "Move to folder")
         screenshot("4-move")
         click(bar, "Work")
         assertEquals(setOf("apple juice", "apple pie"), dao.getAll().filter { it.folderId == work.id }.map { it.text }.toSet())
         assertEquals(44 - 2, dao.getAll().size)
-        click(bar, "✕") // ends the search
+        click(bar, "Close") // ends the search
         assertEquals(42, list.adapter!!.itemCount)
 
         // pin from the selection
@@ -216,7 +222,7 @@ class ClipboardPanelTest {
         assertTrue(list.getChildAt(1).performLongClick())
         idle()
         screenshot("7-dark-selection")
-        click(bar, "✕")
+        click(bar, "Close")
         click(bar, "Search")
         screenshot("8-dark-search")
     }

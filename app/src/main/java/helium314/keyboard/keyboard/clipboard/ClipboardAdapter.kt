@@ -38,6 +38,9 @@ class ClipboardAdapter(
     var onSelectionStart: ((Long, Int) -> Unit)? = null
     val isSelecting get() = selectionMode
 
+    /** folder id to name, the name is shown next to the date of clips in these folders */
+    var folderNames: Map<Long, String> = emptyMap()
+
     var pinnedIconResId = 0
     var itemBackgroundId = 0
     var itemTypeFace: Typeface? = null
@@ -185,8 +188,10 @@ class ClipboardAdapter(
             } else {
                 contentTextView.text = historyEntry.text?.take(1000) // truncate displayed text for performance reasons
             }
-            dateView.text = DateUtils.formatDateTime(itemView.context, historyEntry.timeStamp,
+            val date = DateUtils.formatDateTime(itemView.context, historyEntry.timeStamp,
                 DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH)
+            val folderName = historyEntry.folderId?.let { folderNames[it] }
+            dateView.text = if (folderName == null) date else "$date · $folderName"
             pinnedIconView.visibility = if (historyEntry.isPinned) View.VISIBLE else View.GONE
             contentImageView.visibility = if (historyEntry.filename != null) View.VISIBLE else View.GONE
             contentTextView.visibility = if (contentTextView.text.isNullOrEmpty()) View.GONE else View.VISIBLE
