@@ -76,6 +76,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private var selectionActive = false
     private var moveTargetMode = false // selecting the folder to move the selected clips to
     private val selectedIds = mutableSetOf<Long>()
+    private var selectedBeforeDrag: Set<Long> = emptySet() // drag-select adds the clips under the finger to these
 
     private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER, SEARCH }
 
@@ -152,7 +153,11 @@ class ClipboardHistoryView @JvmOverloads constructor(
             onSelectionCancel = { endSelection() }
             onMoveTarget = { moveSelectionTo(it) }
         }
-        clipboardAdapter.onSelectionStart = { startSelection(it) }
+        clipboardAdapter.onSelectionStart = { id, position ->
+            startSelection(id)
+            clipboardRecyclerView.startDragSelect(position)
+        }
+        clipboardRecyclerView.onDragSelect = { from, to -> dragSelect(from, to) }
         clipboardAdapter.onSelectionToggle = { toggleSelection(it) }
         val clipboardStrip = KeyboardSwitcher.getInstance().clipboardStrip!!
         getEnabledClipboardToolbarKeys(context.prefs()).forEach {
@@ -389,12 +394,23 @@ class ClipboardHistoryView @JvmOverloads constructor(
         refreshList(animate = false)
     }
 
+    /** long-press on a clip: starts the selection, or adds the clip if the selection is active already */
     private fun startSelection(id: Long) {
         if (inputMode != InputMode.NONE) stopInput() // a search text stays active, the keyboard closes
+        if (!selectionActive) selectedIds.clear()
         selectionActive = true
         moveTargetMode = false
-        selectedIds.clear()
         selectedIds.add(id)
+        selectedBeforeDrag = selectedIds.toSet()
+        updateSelectionUi()
+    }
+
+    /** the finger was dragged after the long-press: all clips between the first and the current one are selected */
+    private fun dragSelect(from: Int, to: Int) {
+        if (!selectionActive) return
+        selectedIds.clear()
+        selectedIds.addAll(selectedBeforeDrag)
+        selectedIds.addAll(clipboardAdapter.idsBetween(from, to))
         updateSelectionUi()
     }
 

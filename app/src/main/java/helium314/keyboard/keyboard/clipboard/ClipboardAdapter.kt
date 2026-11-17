@@ -33,7 +33,9 @@ class ClipboardAdapter(
     private var selectionMode = false
     private var selectedIds: Set<Long> = emptySet()
     var onSelectionToggle: ((Long) -> Unit)? = null
-    var onSelectionStart: ((Long) -> Unit)? = null
+    /** called on long-press with the clip id and its position, starts the selection or adds to it */
+    var onSelectionStart: ((Long, Int) -> Unit)? = null
+    val isSelecting get() = selectionMode
 
     var pinnedIconResId = 0
     var itemBackgroundId = 0
@@ -51,6 +53,11 @@ class ClipboardAdapter(
         holder.setContent(entryAt(position))
     }
 
+    override fun onBindViewHolder(holder: ViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.isEmpty()) onBindViewHolder(holder, position)
+        else holder.setSelected(entryAt(position)) // only the selection changed
+    }
+
     override fun getItemCount() = items.size
 
     fun entryAt(position: Int): ClipboardHistoryEntry? = items.getOrNull(position)
@@ -60,10 +67,18 @@ class ClipboardAdapter(
     /** the shown entries that are in [ids], in display order */
     fun entriesInOrder(ids: Set<Long>): List<ClipboardHistoryEntry> = items.filter { it.id in ids }
 
+    /** ids of the shown entries from one position to another, both included, in any order */
+    fun idsBetween(from: Int, to: Int): List<Long> {
+        if (items.isEmpty()) return emptyList()
+        val first = minOf(from, to).coerceIn(0, items.lastIndex)
+        val last = maxOf(from, to).coerceIn(0, items.lastIndex)
+        return items.subList(first, last + 1).map { it.id }
+    }
+
     fun setSelection(selecting: Boolean, ids: Set<Long>) {
         selectionMode = selecting
         selectedIds = ids
-        notifyDataSetChanged()
+        notifyItemRangeChanged(0, items.size, SELECTION_CHANGED)
     }
 
     /**
@@ -145,7 +160,11 @@ class ClipboardAdapter(
             pinnedIconView.visibility = if (historyEntry.isPinned) View.VISIBLE else View.GONE
             contentImageView.visibility = if (historyEntry.filename != null) View.VISIBLE else View.GONE
             contentTextView.visibility = if (contentTextView.text.isNullOrEmpty()) View.GONE else View.VISIBLE
-            itemView.alpha = if (selectionMode && historyEntry.id in selectedIds) 0.5f else 1f
+            setSelected(historyEntry)
+        }
+
+        fun setSelected(historyEntry: ClipboardHistoryEntry?) {
+            itemView.alpha = if (selectionMode && historyEntry != null && historyEntry.id in selectedIds) 0.5f else 1f
         }
 
         @SuppressLint("ClickableViewAccessibility")
@@ -162,8 +181,12 @@ class ClipboardAdapter(
         }
 
         override fun onLongClick(view: View): Boolean {
-            onSelectionStart?.invoke(view.tag as Long)
+            onSelectionStart?.invoke(view.tag as Long, bindingAdapterPosition)
             return true
         }
+    }
+
+    companion object {
+        private const val SELECTION_CHANGED = "selection"
     }
 }
