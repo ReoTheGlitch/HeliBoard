@@ -108,6 +108,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     /** only public for restoring backups */
     fun insertNewEntry(timestamp: Long, pinned: Boolean, text: String?, filename: String?, mimeTypes: List<String>?, context: Context?, folderId: Long? = null) = synchronized(this) {
+        changed()
         val cv = ContentValues(6)
         cv.put(COLUMN_TIMESTAMP, timestamp)
         cv.put(COLUMN_PINNED, pinned)
@@ -125,6 +126,7 @@ class ClipboardDao private constructor(private val db: Database) {
     }
 
     private fun updateTimestampAt(index: Int, timestamp: Long) {
+        changed()
         val entry = cache[index]
         entry.timeStamp = timestamp
         cache.sort()
@@ -151,6 +153,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     /** pins or unpins the given clips, they keep their date. Only these rows are written. */
     fun setPinned(ids: Collection<Long>, pinned: Boolean) = synchronized(this) {
+        changed()
         val idSet = ids.toHashSet()
         val entries = cache.filter { it.id in idSet && it.isPinned != pinned }
         if (entries.isEmpty()) return@synchronized
@@ -161,6 +164,7 @@ class ClipboardDao private constructor(private val db: Database) {
     }
 
     fun togglePinned(id: Long) = synchronized(this) {
+        changed()
         val entry = cache.firstOrNull { it.id == id } ?: return@synchronized
         // the date is kept, it shows when the clip was copied
         entry.isPinned = !entry.isPinned
@@ -189,6 +193,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     /** returns the created folder, or null if the name is empty or already used (names are compared ignoring case) */
     fun createFolder(name: String): ClipboardFolder? = synchronized(this) {
+        changed()
         val cleanName = cleanFolderName(name) ?: return@synchronized null
         if (folders.any { it.name.equals(cleanName, ignoreCase = true) }) return@synchronized null
         val cv = ContentValues(1).apply { put(COLUMN_NAME, cleanName) }
@@ -199,6 +204,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     /** returns false if the name is empty or already used by another folder */
     fun renameFolder(id: Long, name: String): Boolean = synchronized(this) {
+        changed()
         val cleanName = cleanFolderName(name) ?: return@synchronized false
         val folder = folders.firstOrNull { it.id == id } ?: return@synchronized false
         if (folders.any { it.id != id && it.name.equals(cleanName, ignoreCase = true) }) return@synchronized false
@@ -210,6 +216,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     /** only changes the clips given, folderId null means no folder */
     fun moveClipsToFolder(ids: Collection<Long>, folderId: Long?) = synchronized(this) {
+        changed()
         if (folderId != null && folders.none { it.id == folderId }) return@synchronized
         val idSet = ids.toHashSet()
         val entries = cache.filter { it.id in idSet }
@@ -235,6 +242,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     /** removes the folder, its clips are kept and are in no folder then */
     fun deleteFolder(id: Long): Boolean = synchronized(this) {
+        changed()
         val folder = folders.firstOrNull { it.id == id } ?: return@synchronized false
         val database = db.writableDatabase
         database.beginTransaction()
@@ -256,6 +264,7 @@ class ClipboardDao private constructor(private val db: Database) {
      * Returns false if the text is empty or another clip has this text already.
      */
     fun updateClipText(id: Long, text: String): Boolean = synchronized(this) {
+        changed()
         val index = cache.indexOfFirst { it.id == id }
         if (index < 0 || text.isEmpty()) return@synchronized false
         val old = cache[index]
@@ -284,6 +293,7 @@ class ClipboardDao private constructor(private val db: Database) {
      * A clip without folder in the file stays where it is.
      */
     fun importClips(export: ClipboardExport): ClipboardImportResult = synchronized(this) {
+        changed()
         export.folders.forEach { getOrCreateFolder(it) }
         val byId = cache.associateBy { it.id }
         val byText = HashMap<String, ClipboardHistoryEntry>()
@@ -331,10 +341,16 @@ class ClipboardDao private constructor(private val db: Database) {
         ClipboardImportResult(added.size, moves.values.sumOf { it.size }, unchanged)
     }
 
+    /** a copy of the history is written to the automatic backup soon */
+    private fun changed() {
+        backupContext?.let { ClipboardAutoBackup.schedule(it) }
+    }
+
     private fun cleanFolderName(name: String): String? =
         name.trim().replace(Regex("\\s+"), " ").take(MAX_FOLDER_NAME_LENGTH).trim().ifEmpty { null }
 
     private fun delete(entries: List<ClipboardHistoryEntry>) = synchronized(this) {
+        changed()
         if (entries.isEmpty()) return@synchronized
         val ids = entries.mapTo(HashSet()) { it.id }
         cache.removeAll { it.id in ids }
@@ -400,6 +416,7 @@ class ClipboardDao private constructor(private val db: Database) {
         const val ADD_FOLDER_ID_COLUMN = "ALTER TABLE $TABLE ADD COLUMN $COLUMN_FOLDER_ID INTEGER"
 
         private var instance: ClipboardDao? = null
+        private var backupContext: Context? = null
         lateinit var clipFilesDir: File
             private set
 
@@ -410,6 +427,9 @@ class ClipboardDao private constructor(private val db: Database) {
                     instance = ClipboardDao(Database.getInstance(context))
                     clipFilesDir = File(context.filesDir, "clipboard")
                     clipFilesDir.mkdirs()
+                    backupContext = context.applicationContext
+                    // also clips from before the automatic backup existed are saved
+                    ClipboardAutoBackup.schedule(context)
                 } catch (e: Throwable) {
                     Log.e(TAG, "can't create ClipboardDao", e)
                 }

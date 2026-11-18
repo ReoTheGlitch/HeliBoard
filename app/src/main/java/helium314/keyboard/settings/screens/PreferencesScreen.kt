@@ -22,6 +22,7 @@ import helium314.keyboard.latin.utils.getActivity
 import helium314.keyboard.latin.utils.locale
 import helium314.keyboard.latin.utils.prefs
 import helium314.keyboard.settings.SettingsWithoutKey
+import helium314.keyboard.settings.preferences.ClipboardAutoBackupPreference
 import helium314.keyboard.settings.preferences.ClipboardExportImportPreference
 import helium314.keyboard.settings.preferences.ListPreference
 import helium314.keyboard.settings.Setting
@@ -86,6 +87,7 @@ fun PreferencesScreen(
         if (clipboardHistoryEnabled && prefs.getBoolean(Settings.PREF_CLIPBOARD_USE_FILES, Defaults.PREF_CLIPBOARD_USE_FILES))
             Settings.PREF_CLIPBOARD_FILES_SIZE_LIMIT else null,
         SettingsWithoutKey.CLIPBOARD_EXPORT_IMPORT,
+        SettingsWithoutKey.CLIPBOARD_AUTO_BACKUP,
     )
     SearchSettingsScreen(
         onClickBack = onClickBack,
@@ -210,6 +212,9 @@ fun createPreferencesSettings(context: Context) = listOf(
     },
     Setting(context, SettingsWithoutKey.CLIPBOARD_EXPORT_IMPORT, R.string.clipboard_export_import) {
         ClipboardExportImportPreference(it)
+    },
+    Setting(context, SettingsWithoutKey.CLIPBOARD_AUTO_BACKUP, R.string.clipboard_auto_backup) {
+        ClipboardAutoBackupPreference(it)
     },
     Setting(context, Settings.PREF_VIBRATION_DURATION_SETTINGS, R.string.prefs_keypress_vibration_duration_settings) { setting ->
         SliderPreference(

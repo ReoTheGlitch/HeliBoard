@@ -284,6 +284,16 @@ Import adds the clips you don\'t have yet and moves clips into the folders given
     <string name="clipboard_import_done">Added %1$d clips, moved %2$d into folders, %3$d unchanged</string>
     <!-- Message when the clipboard history could not be written to the file -->
     <string name="clipboard_export_error">Cannot write file</string>
+    <!-- Title of the setting that shows the automatic backups of the clipboard history -->
+    <string name="clipboard_auto_backup">Automatic clipboard backups</string>
+    <!-- Description of the automatic clipboard backup setting -->
+    <string name="clipboard_auto_backup_summary">Text clips and folders are saved on this device after every change, one file per day for the last 7 days</string>
+    <!-- Title of the dialog to choose an automatic clipboard backup -->
+    <string name="clipboard_auto_backup_restore">Restore clips from a backup</string>
+    <!-- Message in the dialog to choose an automatic clipboard backup, the placeholder is a folder path -->
+    <string name="clipboard_auto_backup_message">Missing clips and folders are added, nothing is deleted. Images are not saved. The files are in %s and are removed when the app is uninstalled.</string>
+    <!-- Message shown when there is no automatic clipboard backup yet -->
+    <string name="clipboard_auto_backup_none">There is no backup yet. The first one is written a few seconds after the next change of the clipboard history.</string>
     <!-- Preferences item for showing pinned clipboard items first -->
     <string name="clipboard_history_pinned_first">Show pinned items on top</string>
     <!-- Preferences item for extending the clipboard history to files (images or others) -->
