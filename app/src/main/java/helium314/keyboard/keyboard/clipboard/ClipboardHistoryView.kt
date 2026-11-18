@@ -15,6 +15,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
+import kotlin.math.abs
 import helium314.keyboard.event.HapticEvent
 import helium314.keyboard.keyboard.KeyboardActionListener
 import helium314.keyboard.keyboard.KeyboardElement
@@ -96,6 +97,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
     companion object {
         private const val UNDO_TIME_MS = 5000L
         private const val MAX_SEARCH_LENGTH = 100
+        private const val MAX_SCROLL_DISTANCE = 20
         private const val EMPTY_PLACEHOLDER = "¯\\_(ツ)_/¯" // same as in the layout
     }
 
@@ -261,6 +263,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         selectionActive = false
         moveTargetMode = false
         selectedIds.clear()
+        clipboardAdapter.setSelection(false, emptySet())
         listHasInputHeight = null
 
         placeholderView.apply {
@@ -304,6 +307,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         selectionActive = false
         moveTargetMode = false
         selectedIds.clear()
+        clipboardAdapter.setSelection(false, emptySet())
         clipboardRecyclerView.adapter = null
         clipboardHistoryManager.setHistoryChangeListener(null)
         clipboardAdapter.clipboardHistoryManager = null
@@ -351,6 +355,12 @@ class ClipboardHistoryView @JvmOverloads constructor(
 
     override fun onClipMoved(oldPosition: Int, newPosition: Int) = onMainThread {
         val movedId = clipboardHistoryManager.getHistoryEntry(newPosition)?.id
+        // a clip that is copied again while its removal can still be undone is kept
+        if (movedId != null && movedId == pendingDelete?.id) {
+            removeCallbacks(commitDeleteRunnable)
+            pendingDelete = null
+            updateInputState()
+        }
         refreshList(scrollToId = if (newPosition < oldPosition) movedId else null)
         movedId?.let { clipboardAdapter.entryChanged(it) }
     }
@@ -421,7 +431,12 @@ class ClipboardHistoryView @JvmOverloads constructor(
         placeholderView.text = if (query.isNullOrBlank()) EMPTY_PLACEHOLDER else context.getString(R.string.clipboard_no_results)
         if (!animate) clipboardRecyclerView.scrollToPosition(0)
         val position = scrollToId?.let { clipboardAdapter.positionOf(it) } ?: -1
-        if (position >= 0) clipboardRecyclerView.smoothScrollToPosition(position)
+        if (position >= 0) {
+            // only scroll to a clip that is near, a long scroll would bind every row on the way and lose the place of the user
+            val first = (clipboardRecyclerView.layoutManager as? StaggeredGridLayoutManager)
+                ?.findFirstVisibleItemPositions(null)?.minOrNull() ?: 0
+            if (abs(position - first) <= MAX_SCROLL_DISTANCE) clipboardRecyclerView.smoothScrollToPosition(position)
+        }
         // clips that are gone can't stay selected, and the search line shows "All" only if there are results
         if (selectionActive && selectedIds.retainAll(clipboardAdapter.shownIds().toSet())) {
             selectedBeforeDrag = selectedIds.toSet()
@@ -512,7 +527,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         safely {
             context.startActivity(Intent(context, ClipboardEditActivity::class.java)
                 .putExtra(ClipboardEditActivity.EXTRA_CLIP_ID, clip.id)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK))
         }
     }
 
@@ -573,6 +588,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
     }
 
     private fun toggleSelection(id: Long) {
+        if (!selectionActive) return
         if (!selectedIds.add(id)) selectedIds.remove(id)
         updateSelectionUi()
     }
@@ -585,6 +601,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         val shown = clipboardAdapter.shownIds()
         if (shown.isEmpty()) return
         if (inputMode != InputMode.NONE) stopInput() // a search text stays active, the keyboard closes
+        if (!selectionActive) selectedIds.clear()
         if (selectionActive && selectedIds.containsAll(shown)) selectedIds.removeAll(shown.toSet())
         else selectedIds.addAll(shown)
         selectionActive = true
@@ -631,7 +648,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
 
     private fun handleInputKey(key: String) {
         when (key) {
-            ClipboardMiniKeyboard.BACKSPACE_KEY -> if (inputText.isNotEmpty()) inputText.deleteCharAt(inputText.length - 1)
+            ClipboardMiniKeyboard.BACKSPACE_KEY -> if (inputText.isNotEmpty()) inputText.setLength(inputText.offsetByCodePoints(inputText.length, -1))
             ClipboardMiniKeyboard.CLEAR_KEY -> inputText.setLength(0)
             else -> {
                 val maxLength = if (inputMode == InputMode.SEARCH) MAX_SEARCH_LENGTH else ClipboardDao.MAX_FOLDER_NAME_LENGTH

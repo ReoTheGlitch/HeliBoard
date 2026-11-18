@@ -87,7 +87,7 @@ SPDX-License-Identifier: Apache-2.0 AND GPL-3.0-only
         </activity>
 
         <activity android:name="helium314.keyboard.keyboard.clipboard.ClipboardEditActivity" android:exported="false"
-            android:theme="@style/platformActivityTheme" android:excludeFromRecents="true"
+            android:theme="@style/platformActivityTheme" android:excludeFromRecents="true" android:taskAffinity=""
             android:label="@string/clipboard_edit_clip" android:windowSoftInputMode="adjustResize|stateAlwaysVisible" />
 
         <activity android:name="helium314.keyboard.keyboard.emoji.EmojiSearchActivity" android:exported="false"

@@ -169,7 +169,7 @@ class ClipboardHistoryManager(
         clipboardDao?.deleteClipById(id)
     }
 
-    fun getAllEntries(): List<ClipboardHistoryEntry> = clipboardDao?.getAll() ?: emptyList()
+    fun getAllEntries(): List<ClipboardHistoryEntry> = clipboardDao?.snapshot() ?: emptyList()
 
     fun getFolders(): List<ClipboardFolder> = clipboardDao?.getFolders() ?: emptyList()
 

@@ -256,11 +256,11 @@ sealed interface KeyData : AbstractKeyData {
         private const val POPUP_KEYS_NAVIGATE_EMOJI_PREVIOUS = "!fixedColumnOrder!3,!needsDividers!,!icon/previous_key|!code/key_action_previous,!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji"
         // backslash must be escaped in popup key texts
         private val EMOTICON_POPUP_KEYS = listOf(
-            Key.POPUP_KEYS_HAS_LABELS, "!fixedColumnOrder!2",
+            Key.POPUP_KEYS_HAS_LABELS, Key.POPUP_KEYS_AUTO_COLUMN_ORDER + "4",
             "(◕‿◕)", "ʕ•ᴥ•ʔ",
             "(ಠ_ಠ)", "ಥ_ಥ",
-            "¯\\\\_(ツ)_/¯", "(╯°□°)╯︵┻━┻",
-            "(づ｡◕‿‿◕｡)づ", "ヽ(・∀・)ﾉ",
+            "¯\\\\_(ツ)_/¯", "(╯°□°)╯",
+            "(づ◕‿◕)づ", "ヽ(・∀・)ﾉ",
             "(=^･ω･^=)", "(╥﹏╥)",
             "(¬‿¬)", "♪(´▽｀)",
             "\\\\o/", "TwT",
@@ -455,7 +455,8 @@ sealed interface KeyData : AbstractKeyData {
             }
             KeyLabel.SPACE -> if (params.mId.element.isNumberLayout) Key.LABEL_FLAGS_ALIGN_ICON_TO_BOTTOM else 0
             KeyLabel.SHIFT -> Key.LABEL_FLAGS_PRESERVE_CASE
-            toolbarKeyStrings[ToolbarKey.EMOJI] -> KeyboardTheme.getThemeActionAndEmojiKeyLabelFlags(params.mThemeId)
+            // the emoticons in the popup keep their case
+            toolbarKeyStrings[ToolbarKey.EMOJI] -> Key.LABEL_FLAGS_PRESERVE_CASE or KeyboardTheme.getThemeActionAndEmojiKeyLabelFlags(params.mThemeId)
             KeyLabel.COM -> Key.LABEL_FLAGS_AUTO_X_SCALE or Key.LABEL_FLAGS_FONT_NORMAL or Key.LABEL_FLAGS_PRESERVE_CASE
             KeyLabel.CURRENCY -> Key.LABEL_FLAGS_FOLLOW_KEY_LETTER_RATIO
             KeyLabel.CTRL, KeyLabel.ALT, KeyLabel.FN, KeyLabel.META -> Key.LABEL_FLAGS_PRESERVE_CASE

@@ -24,7 +24,7 @@ class ClipboardEditActivity : Activity() {
         super.onCreate(savedInstanceState)
         val dao = ClipboardDao.getInstance(this)
         val id = intent.getLongExtra(EXTRA_CLIP_ID, -1L)
-        val clip = dao?.getAll()?.firstOrNull { it.id == id }
+        val clip = dao?.get(id)
         if (dao == null || clip?.text == null || clip.filename != null) {
             finish()
             return
@@ -76,11 +76,13 @@ class ClipboardEditActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        editField?.let { outState.putString(STATE_TEXT, it.text.toString()) }
+        // a very long text is too large for the saved state, it is loaded from the history again
+        editField?.text?.takeIf { it.length <= MAX_SAVED_LENGTH }?.let { outState.putString(STATE_TEXT, it.toString()) }
     }
 
     companion object {
         const val EXTRA_CLIP_ID = "clip_id"
         private const val STATE_TEXT = "text"
+        private const val MAX_SAVED_LENGTH = 50_000
     }
 }

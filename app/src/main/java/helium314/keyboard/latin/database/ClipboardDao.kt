@@ -107,7 +107,7 @@ class ClipboardDao private constructor(private val db: Database) {
     }
 
     /** only public for restoring backups */
-    fun insertNewEntry(timestamp: Long, pinned: Boolean, text: String?, filename: String?, mimeTypes: List<String>?, context: Context?, folderId: Long? = null) {
+    fun insertNewEntry(timestamp: Long, pinned: Boolean, text: String?, filename: String?, mimeTypes: List<String>?, context: Context?, folderId: Long? = null) = synchronized(this) {
         val cv = ContentValues(6)
         cv.put(COLUMN_TIMESTAMP, timestamp)
         cv.put(COLUMN_PINNED, pinned)
@@ -138,7 +138,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     fun getAt(index: Int) = cache[index]
 
-    fun get(id: Long) = cache.first { it.id == id }
+    fun get(id: Long) = synchronized(this) { cache.firstOrNull { it.id == id } }
 
     fun getAll(): List<ClipboardHistoryEntry> = cache
 
@@ -147,7 +147,7 @@ class ClipboardDao private constructor(private val db: Database) {
 
     fun count() = cache.size
 
-    fun sort() = cache.sort()
+    fun sort() = synchronized(this) { cache.sort() }
 
     /** pins or unpins the given clips, they keep their date. Only these rows are written. */
     fun setPinned(ids: Collection<Long>, pinned: Boolean) = synchronized(this) {
@@ -161,7 +161,7 @@ class ClipboardDao private constructor(private val db: Database) {
     }
 
     fun togglePinned(id: Long) = synchronized(this) {
-        val entry = cache.first { it.id == id }
+        val entry = cache.firstOrNull { it.id == id } ?: return@synchronized
         // the date is kept, it shows when the clip was copied
         entry.isPinned = !entry.isPinned
         if (listener != null) {
@@ -179,9 +179,9 @@ class ClipboardDao private constructor(private val db: Database) {
 
     // RecyclerView initiates this, so we don't call listener (or we'll get an IndexOutOfRangeException from RecyclerView)
     // pinned clips are not deleted this way
-    fun deleteClipById(id: Long) {
-        val entry = cache.firstOrNull { it.id == id } ?: return
-        if (entry.isPinned) return
+    fun deleteClipById(id: Long) = synchronized(this) {
+        val entry = cache.firstOrNull { it.id == id } ?: return@synchronized
+        if (entry.isPinned) return@synchronized
         delete(listOf(entry))
     }
 
@@ -295,7 +295,8 @@ class ClipboardDao private constructor(private val db: Database) {
         database.beginTransaction()
         try {
             for (clip in export.clips) {
-                if (clip.text.isEmpty()) continue
+                // a longer text could not be read from the database again
+                if (clip.text.isEmpty() || clip.text.length > MAX_IMPORTED_CLIP_LENGTH) continue
                 val folderId = clip.folder?.let { getOrCreateFolder(it)?.id }
                 val existing = clip.id?.let { byId[it] }?.takeIf { it.text == clip.text && it.filename == null } ?: byText[clip.text]
                 if (existing != null) {
@@ -335,7 +336,8 @@ class ClipboardDao private constructor(private val db: Database) {
 
     private fun delete(entries: List<ClipboardHistoryEntry>) = synchronized(this) {
         if (entries.isEmpty()) return@synchronized
-        cache.removeAll(entries)
+        val ids = entries.mapTo(HashSet()) { it.id }
+        cache.removeAll { it.id in ids }
         db.writableDatabase.delete(TABLE, "$COLUMN_ID IN (${entries.joinToString(",") { it.id.toString() }})", null)
         entries.forEach { if (it.filename != null) File(clipFilesDir, it.filename).delete() }
     }
@@ -354,20 +356,21 @@ class ClipboardDao private constructor(private val db: Database) {
         delete(toRemove)
     }
 
-    fun clearNonPinned() {
+    fun clearNonPinned() = synchronized(this) {
         val indicesToRemove = mutableListOf<Int>()
         cache.forEachIndexed { idx, clip ->
             if (!clip.isPinned)
                 indicesToRemove.add(idx)
         }
         if (indicesToRemove.isEmpty())
-            return // nothing to remove
+            return@synchronized // nothing to remove
         delete(cache.filter { !it.isPinned })
         listener?.onClipsRemoved(indicesToRemove[0], indicesToRemove.size)
     }
 
     companion object {
         private const val TAG = "ClipboardDao"
+        private const val MAX_IMPORTED_CLIP_LENGTH = 500_000
 
         private const val TABLE = "CLIPBOARD"
         // it's possible timestamp is not unique, so we use a separate ID
