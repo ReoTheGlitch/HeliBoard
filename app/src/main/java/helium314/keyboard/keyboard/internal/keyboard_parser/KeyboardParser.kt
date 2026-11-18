@@ -66,7 +66,7 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
         if (params.mId.element.isBottomRow) {
             heightRescale = 4f
             // to have same height as alpha keyboard we act as if we had the default number of rows
-            val virtualRows = if (Settings.getValues().mShowsNumberRow) 5 else 4 // determine from Settings, because it's not actually in params for bottom rows
+            val virtualRows = 4 + Settings.getValues().mExtraRows // determine from Settings, because it's not actually in params for bottom rows
             // params rescale is not perfect, especially mTopPadding may cause 1 pixel offsets because it's already been converted to int once
             params.mOccupiedHeight /= virtualRows
             params.mBaseHeight /= virtualRows
@@ -148,7 +148,22 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
                 key.toKeyParams(params, defaultLabelFlags or extraFlags)
             }
         }
-        return setReasonableWidths(baseKeyParams, functionalKeys)
+        val rows = setReasonableWidths(baseKeyParams, functionalKeys)
+        // only on the symbol layers, the keyboard gets higher by this row so the keys keep their size
+        if (element.isAlphaOrSymbol && !element.isAlphabet && Settings.getValues().mShowsPcKeysRow) {
+            val newBaseHeight = params.mBaseHeight * (rows.size + 1) / rows.size
+            params.mOccupiedHeight += newBaseHeight - params.mBaseHeight
+            params.mBaseHeight = newBaseHeight
+            rows.add(0, getPcKeysRow())
+        }
+        return rows
+    }
+
+    /** esc, tab, ctrl, alt and arrow keys like on a computer keyboard, shown above the symbols */
+    private fun getPcKeysRow(): ArrayList<KeyParams> {
+        val keys = LayoutParser.parseJsonString(PC_KEYS_ROW).first().mapNotNull { it.compute(params)?.toKeyParams(params) }
+        keys.forEach { it.mWidth = 1f / keys.size }
+        return ArrayList(keys)
     }
 
     /** interprets key width -1, adjusts row size to nicely fit on screen, adds spacers if necessary */
@@ -339,6 +354,12 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
 
     companion object {
         private const val TAG = "KeyboardParser"
+        private const val PC_KEYS_ROW = """[[
+            { "label": "esc", "type": "function" }, { "label": "tab", "type": "function" },
+            { "label": "ctrl", "type": "function" }, { "label": "alt", "type": "function" },
+            { "label": "left", "type": "function" }, { "label": "down", "type": "function" },
+            { "label": "up", "type": "function" }, { "label": "right", "type": "function" }
+        ]]"""
     }
 
 }

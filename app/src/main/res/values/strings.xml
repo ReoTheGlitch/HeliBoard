@@ -389,6 +389,10 @@ Import adds the clips you don\'t have yet and moves clips into the folders given
     <string name="number_row">Number row</string>
     <!-- Description of the settings to enable number row -->
     <string name="number_row_summary">Always show number row</string>
+    <!-- Title of the setting for a row with keys of a computer keyboard -->
+    <string name="pc_keys_row">Ctrl, Alt and arrow keys in symbols</string>
+    <!-- Description of the setting for a row with keys of a computer keyboard -->
+    <string name="pc_keys_row_summary">Show Esc, Tab, Ctrl, Alt and arrow keys above the symbols (?123). Tap Ctrl or Alt, then the other key, also after going back to the letters.</string>
     <!-- Title of the setting to replace the top row in symbols layout with number row -->
     <string name="number_row_in_symbols">Show number row in symbols view</string>
     <!-- Title of the setting to localize number row -->

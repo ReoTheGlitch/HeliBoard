@@ -500,6 +500,8 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
                 metaState = metaState and metaCode.inv()
                 keyboardSwitcher.mainKeyboardView?.updateLockState(primaryCode, false)
             }
+        } else if (primaryCode == KeyCode.SYMBOL_ALPHA || primaryCode == KeyCode.ALPHA || primaryCode == KeyCode.SYMBOL) {
+            // ctrl and alt stay active when the layer is changed, they are on the symbol layers and may be used with a letter
         } else if (metaState != 0) {
             // non-meta key -> unset all set / released_but_active, and mark pressed as UNSET_ON_RELEASE
             metaPressStates.forEach { key, value ->
