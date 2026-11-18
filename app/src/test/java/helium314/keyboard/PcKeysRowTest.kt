@@ -40,6 +40,9 @@ class PcKeysRowTest {
         // the keys are as high as the other symbol keys, the keyboard is higher instead
         assertTrue(top.first().height >= letters.mMostCommonKeyHeight * 0.8f, "key height ${top.first().height}")
         assertTrue(symbols.mOccupiedHeight > letters.mOccupiedHeight)
+        // the letters of the common shortcuts are in the row below
+        val secondY = keys.filter { it.y > top.first().y }.minOf { it.y }
+        assertEquals("acvxzysf".map { it.code }, keys.filter { it.y == secondY }.sortedBy { it.x }.map { it.code })
         println("PC ROW key ${top.first().width}x${top.first().height}, letter key ${letters.mMostCommonKeyWidth}x${letters.mMostCommonKeyHeight}")
     }
 }

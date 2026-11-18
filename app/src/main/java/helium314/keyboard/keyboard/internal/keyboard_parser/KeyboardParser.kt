@@ -151,20 +151,25 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
         val rows = setReasonableWidths(baseKeyParams, functionalKeys)
         // only on the symbol layers, the keyboard gets higher by this row so the keys keep their size
         if (element.isAlphaOrSymbol && !element.isAlphabet && Settings.getValues().mShowsPcKeysRow) {
-            val newBaseHeight = params.mBaseHeight * (rows.size + 1) / rows.size
+            val pcRows = getPcKeysRows()
+            val newBaseHeight = params.mBaseHeight * (rows.size + pcRows.size) / rows.size
             params.mOccupiedHeight += newBaseHeight - params.mBaseHeight
             params.mBaseHeight = newBaseHeight
-            rows.add(0, getPcKeysRow())
+            rows.addAll(0, pcRows)
         }
         return rows
     }
 
-    /** esc, tab, ctrl, alt and arrow keys like on a computer keyboard, shown above the symbols */
-    private fun getPcKeysRow(): ArrayList<KeyParams> {
-        val keys = LayoutParser.parseJsonString(PC_KEYS_ROW).first().mapNotNull { it.compute(params)?.toKeyParams(params) }
-        keys.forEach { it.mWidth = 1f / keys.size }
-        return ArrayList(keys)
-    }
+    /**
+     * esc, tab, ctrl, alt and arrow keys like on a computer keyboard, shown above the symbols.
+     * The second row has the letters of the common shortcuts, so ctrl + c and similar work without changing the layer.
+     */
+    private fun getPcKeysRows(): List<ArrayList<KeyParams>> =
+        LayoutParser.parseJsonString(PC_KEYS_ROW).map { row ->
+            val keys = row.mapNotNull { it.compute(params)?.toKeyParams(params) }
+            keys.forEach { it.mWidth = 1f / keys.size }
+            ArrayList(keys)
+        }
 
     /** interprets key width -1, adjusts row size to nicely fit on screen, adds spacers if necessary */
     private fun setReasonableWidths(bassKeyParams: List<List<KeyParams>>, functionalKeys: List<Pair<List<KeyParams>, List<KeyParams>>>): ArrayList<ArrayList<KeyParams>> {
@@ -359,6 +364,9 @@ class KeyboardParser(private val params: KeyboardParams, private val context: Co
             { "label": "ctrl", "type": "function" }, { "label": "alt", "type": "function" },
             { "label": "left", "type": "function" }, { "label": "down", "type": "function" },
             { "label": "up", "type": "function" }, { "label": "right", "type": "function" }
+        ], [
+            { "label": "a" }, { "label": "c" }, { "label": "v" }, { "label": "x" },
+            { "label": "z" }, { "label": "y" }, { "label": "s" }, { "label": "f" }
         ]]"""
     }
 
