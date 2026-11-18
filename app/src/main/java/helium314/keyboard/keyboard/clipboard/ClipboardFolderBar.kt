@@ -341,6 +341,6 @@ class ClipboardFolderBar @JvmOverloads constructor(
             Toast.makeText(context, contentDescription, Toast.LENGTH_SHORT).show()
             true
         }
-        layoutParams = LayoutParams((44 * density).toInt(), LayoutParams.MATCH_PARENT)
+        layoutParams = LayoutParams((48 * density).toInt(), LayoutParams.MATCH_PARENT)
     }
 }
