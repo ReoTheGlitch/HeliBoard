@@ -92,7 +92,9 @@ class ClipboardHistoryView @JvmOverloads constructor(
     private var confirmFolderDelete = false
     private var listHasInputHeight: Boolean? = null
 
-    private enum class InputMode { NONE, NEW_FOLDER, RENAME_FOLDER, SEARCH }
+    private enum class InputMode { NONE, NEW_FOLDER, NEW_FOLDER_FOR_MOVE, RENAME_FOLDER, SEARCH }
+    /** the clips that are moved to the folder that is named in [InputMode.NEW_FOLDER_FOR_MOVE] */
+    private var idsToMove: List<Long> = emptyList()
 
     companion object {
         private const val UNDO_TIME_MS = 5000L
@@ -161,6 +163,8 @@ class ClipboardHistoryView @JvmOverloads constructor(
             onConfirmInput = { confirmInput() }
             onCancelInput = {
                 when {
+                    // back to the list of folders to move to
+                    inputMode == InputMode.NEW_FOLDER_FOR_MOVE -> stopInput()
                     folderForActions != null -> { folderForActions = null; confirmFolderDelete = false; updateInputState() }
                     pendingDelete != null && !selectionActive && inputMode == InputMode.NONE && searchQuery == null -> commitPendingDelete()
                     selectionActive && moveTargetMode -> { moveTargetMode = false; updateSelectionUi() }
@@ -175,6 +179,10 @@ class ClipboardHistoryView @JvmOverloads constructor(
             }
             onSelectionPin = { safely { pinSelection() } }
             onSelectionMove = { moveTargetMode = true; updateSelectionUi() }
+            onMoveToNewFolder = {
+                idsToMove = selectedIds.toList()
+                startInput(InputMode.NEW_FOLDER_FOR_MOVE, "")
+            }
             onSelectionCopy = { safely { copySelection() } }
             onSelectionCancel = { endSelection() }
             onSelectAll = { selectAllShown() }
@@ -458,7 +466,7 @@ class ClipboardHistoryView @JvmOverloads constructor(
         val inputShown = inputMode != InputMode.NONE
         val text = if (inputShown) inputText.toString() else searchQuery.orEmpty()
         when {
-            selectionActive -> {
+            selectionActive && !inputShown -> {
                 if (moveTargetMode) folderBar.showMoveTargets(clipboardHistoryManager.getFolders())
                 else folderBar.showSelection(selectedIds.size, canEdit = selectedTextClip() != null)
             }
@@ -666,6 +674,14 @@ class ClipboardHistoryView @JvmOverloads constructor(
         val name = inputText.toString()
         val saved = when (inputMode) {
             InputMode.NEW_FOLDER -> clipboardHistoryManager.createFolder(name)?.also { folderFilter = FolderFilter.Folder(it.id) } != null
+            // an existing folder with this name is used, the folder is shown with the moved clips
+            InputMode.NEW_FOLDER_FOR_MOVE -> clipboardHistoryManager.getOrCreateFolder(name)?.also { folder ->
+                clipboardHistoryManager.moveClipsToFolder(idsToMove, folder.id)
+                idsToMove = emptyList()
+                folderFilter = FolderFilter.Folder(folder.id)
+                inputMode = InputMode.NONE
+                endSelection()
+            } != null
             InputMode.RENAME_FOLDER -> clipboardHistoryManager.renameFolder(renamingFolderId, name)
             InputMode.NONE, InputMode.SEARCH -> false
         }

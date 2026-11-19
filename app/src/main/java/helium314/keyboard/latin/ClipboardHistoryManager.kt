@@ -175,6 +175,8 @@ class ClipboardHistoryManager(
 
     fun createFolder(name: String): ClipboardFolder? = clipboardDao?.createFolder(name)
 
+    fun getOrCreateFolder(name: String): ClipboardFolder? = clipboardDao?.getOrCreateFolder(name)
+
     fun renameFolder(id: Long, name: String): Boolean = clipboardDao?.renameFolder(id, name) == true
 
     fun moveClipsToFolder(ids: Collection<Long>, folderId: Long?) {

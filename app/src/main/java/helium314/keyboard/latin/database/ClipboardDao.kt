@@ -280,10 +280,40 @@ class ClipboardDao private constructor(private val db: Database) {
         true
     }
 
+    /** what happened when an edited clip was saved, see [saveEditedClip] */
+    enum class EditResult { SAVED, EXISTS, GONE, EMPTY }
+
+    /**
+     * Saves the text of an edited clip and puts it in the folder ([folderId] null for no folder).
+     * With [asNew] a new clip is added and the edited clip is kept, otherwise its text is replaced.
+     * If another clip has this text already, nothing is added and that clip is put in the folder ([EditResult.EXISTS]).
+     */
+    fun saveEditedClip(id: Long, text: String, folderId: Long?, asNew: Boolean): EditResult = synchronized(this) {
+        if (text.isEmpty()) return@synchronized EditResult.EMPTY
+        val folder = folderId?.takeIf { folderId -> folders.any { it.id == folderId } }
+        val original = cache.firstOrNull { it.id == id }
+        if (!asNew && (original == null || original.filename != null)) return@synchronized EditResult.GONE
+        val sameText = cache.firstOrNull { it.filename == null && it.text == text && (asNew || it.id != id) }
+        if (sameText != null) {
+            moveClipsToFolder(listOf(sameText.id), folder)
+            if (asNew || sameText.id != id) return@synchronized EditResult.EXISTS
+        }
+        if (asNew) {
+            insertNewEntry(System.currentTimeMillis(), false, text, null, null, null, folder)
+        } else {
+            updateClipText(id, text)
+            moveClipsToFolder(listOf(id), folder)
+            // the panel shows the new folder of the clip
+            val index = cache.indexOfFirst { it.id == id }
+            if (index >= 0 && Looper.myLooper() == Looper.getMainLooper()) listener?.onClipMoved(index, index)
+        }
+        EditResult.SAVED
+    }
+
     /** returns the folder with this name (ignoring case), or creates it. Used when restoring or importing. */
-    fun getOrCreateFolder(name: String): ClipboardFolder? {
-        val cleanName = cleanFolderName(name) ?: return null
-        return folders.firstOrNull { it.name.equals(cleanName, ignoreCase = true) } ?: createFolder(cleanName)
+    fun getOrCreateFolder(name: String): ClipboardFolder? = synchronized(this) {
+        val cleanName = cleanFolderName(name) ?: return@synchronized null
+        folders.firstOrNull { it.name.equals(cleanName, ignoreCase = true) } ?: createFolder(cleanName)
     }
 
     /**

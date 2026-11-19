@@ -81,7 +81,7 @@
     <!-- Option to show shortcut key to emoji palettes -->
     <string name="show_emoji_key">Emoji key</string>
     <!-- Option to show shortcut key to d-pad -->
-    <string name="show_dpad_key">D-pad key</string>
+    <string name="show_dpad_key">Alt key (Ctrl, Alt, Shift, arrows)</string>
     <!-- Units abbreviation for the duration (milliseconds) -->
     <string name="abbreviation_unit_milliseconds">%s ms</string>
     <!-- Units abbreviation for the duration (minutes) -->
@@ -232,8 +232,20 @@
     <string name="clipboard_selection_paste">Paste all</string>
     <!-- Clipboard panel: action for one selected clip, and title of the screen where its text is changed -->
     <string name="clipboard_edit_clip">Edit clip</string>
-    <!-- Message when the changed text of a clip can not be saved -->
-    <string name="clipboard_edit_clip_invalid">The text is empty, or another clip has this text already</string>
+    <!-- Label of the folder list in the clip editor -->
+    <string name="clipboard_edit_folder">Folder</string>
+    <!-- Button in the clip editor that adds the edited text as another clip, the original clip is kept -->
+    <string name="clipboard_save_as_new">Save as new</string>
+    <!-- Button in the clip editor that replaces the text of the clip -->
+    <string name="clipboard_replace">Replace</string>
+    <!-- Entry in the folder list of the clip editor that creates a folder -->
+    <string name="clipboard_folder_new_entry">+ New folder…</string>
+    <!-- Message when the edited text is the text of a clip that exists already -->
+    <string name="clipboard_edit_exists">A clip with this text exists already, it was put in the chosen folder</string>
+    <!-- Message when the clip was deleted while it was edited -->
+    <string name="clipboard_edit_gone">This clip does not exist anymore, use Save as new</string>
+    <!-- Message when the edited text is empty -->
+    <string name="clipboard_edit_empty">The text is empty</string>
     <!-- Clipboard panel: action for a folder -->
     <string name="clipboard_folder_rename">Rename folder</string>
     <!-- Clipboard panel: action for a folder -->
@@ -638,7 +650,7 @@ language, hence "No language". -->
     <!-- Name for numpad layout in landscape mode -->
     <string name="layout_numpad_landscape" tools:keep="@string/layout_numpad_landscape">Numpad (landscape)</string>
     <!-- Name for D-pad layout -->
-    <string name="layout_dpad" tools:keep="@string/layout_dpad">D-pad</string>
+    <string name="layout_dpad" tools:keep="@string/layout_dpad">Alt keys</string>
     <!-- Name for number row layout -->
     <string name="layout_number_row" tools:keep="@string/layout_number_row">Number row</string>
     <!-- Name for number row basic layout -->

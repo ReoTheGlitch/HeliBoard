@@ -138,6 +138,49 @@ class ClipboardFolderTest {
         assertNotNull(dao.createFolder("New"))
     }
 
+    @Test
+    fun editedClipIsSavedAsNewOrReplacedAndPutInFolder() {
+        val dao = newDao(context, "edit-${java.util.UUID.randomUUID()}.db")
+        val work = assertNotNull(dao.createFolder("Work"))
+        dao.insertNewEntry(1000, true, "original", null, null, null)
+        dao.insertNewEntry(2000, false, "other", null, null, null)
+        val original = dao.getAll().single { it.text == "original" }
+
+        // save as new: the original is kept, the new clip is in the folder
+        assertEquals(ClipboardDao.EditResult.SAVED, dao.saveEditedClip(original.id, "copy of original", work.id, asNew = true))
+        assertEquals("original", dao.get(original.id)?.text)
+        assertEquals(work.id, dao.getAll().single { it.text == "copy of original" }.folderId)
+        assertEquals(3, dao.count())
+
+        // replace: same clip, date and pin are kept
+        assertEquals(ClipboardDao.EditResult.SAVED, dao.saveEditedClip(original.id, "changed", work.id, asNew = false))
+        val changed = assertNotNull(dao.get(original.id))
+        assertEquals("changed", changed.text)
+        assertEquals(1000, changed.timeStamp)
+        assertTrue(changed.isPinned)
+        assertEquals(work.id, changed.folderId)
+
+        // only the folder is changed
+        assertEquals(ClipboardDao.EditResult.SAVED, dao.saveEditedClip(original.id, "changed", null, asNew = false))
+        assertNull(dao.get(original.id)?.folderId)
+
+        // the text of another clip: nothing is added, that clip is put in the folder
+        assertEquals(ClipboardDao.EditResult.EXISTS, dao.saveEditedClip(original.id, "other", work.id, asNew = false))
+        assertEquals(ClipboardDao.EditResult.EXISTS, dao.saveEditedClip(original.id, "other", work.id, asNew = true))
+        assertEquals("changed", dao.get(original.id)?.text)
+        assertEquals(work.id, dao.getAll().single { it.text == "other" }.folderId)
+        assertEquals(3, dao.count())
+
+        assertEquals(ClipboardDao.EditResult.EMPTY, dao.saveEditedClip(original.id, "", null, asNew = false))
+        assertEquals(ClipboardDao.EditResult.GONE, dao.saveEditedClip(-5, "new text", null, asNew = false))
+        // a clip that is gone can still be saved as new, a folder that is gone is ignored
+        assertEquals(ClipboardDao.EditResult.SAVED, dao.saveEditedClip(-5, "new text", 12345, asNew = true))
+        assertNull(dao.getAll().single { it.text == "new text" }.folderId)
+
+        // a folder with the same name is used again
+        assertEquals(work.id, dao.getOrCreateFolder(" work ")?.id)
+    }
+
     private fun newDao(context: Context, name: String): ClipboardDao {
         val dbCtor = Database::class.java.getDeclaredConstructor(Context::class.java, String::class.java)
         dbCtor.isAccessible = true

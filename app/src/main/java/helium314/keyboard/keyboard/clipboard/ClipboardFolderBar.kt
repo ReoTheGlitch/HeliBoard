@@ -56,6 +56,8 @@ class ClipboardFolderBar @JvmOverloads constructor(
     var onSelectAll: (() -> Unit)? = null
     /** called with the folder to move the selected clips to, null for no folder */
     var onMoveTarget: ((Long?) -> Unit)? = null
+    /** the selected clips are moved to a folder that is created first */
+    var onMoveToNewFolder: (() -> Unit)? = null
 
     private var textColor = Color.BLACK
     private var accentColor = Color.BLUE
@@ -263,6 +265,7 @@ class ClipboardFolderBar @JvmOverloads constructor(
     fun showMoveTargets(folders: List<ClipboardFolder>) {
         show(chips = true, moveTargets = true)
         chipRow.removeAllViews()
+        chipRow.addView(chip(context.getString(R.string.clipboard_folder_new_entry), false) { onMoveToNewFolder?.invoke() })
         chipRow.addView(chip(context.getString(R.string.clipboard_selection_no_folder), false) { onMoveTarget?.invoke(null) })
         folders.forEach { folder ->
             chipRow.addView(chip(folder.name, false, R.drawable.ic_clipboard_folder) { onMoveTarget?.invoke(folder.id) })
