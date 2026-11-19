@@ -151,7 +151,7 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
                 mkv?.getKeyX(x) ?: Constants.NOT_A_COORDINATE, mkv?.getKeyY(y) ?: Constants.NOT_A_COORDINATE, isKeyRepeat)
         }
         latinIME.onEvent(event)
-        metaAfterCodeInput(primaryCode)
+        metaAfterCodeInput(primaryCode, isKeyRepeat)
     }
 
     override fun onTextInput(text: String?) = latinIME.onTextInput(text)
@@ -486,7 +486,7 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
         }
     }
 
-    private fun metaAfterCodeInput(primaryCode: Int) {
+    private fun metaAfterCodeInput(primaryCode: Int, isKeyRepeat: Boolean) {
         val metaCode = primaryCode.toMetaState()
         if (metaCode != null) {
             // meta key might be a popup key, we just toggle between set and unset
@@ -500,11 +500,14 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
                 metaState = metaState and metaCode.inv()
                 keyboardSwitcher.mainKeyboardView?.updateLockState(primaryCode, false)
             }
-        } else if (primaryCode == KeyCode.SYMBOL_ALPHA || primaryCode == KeyCode.ALPHA || primaryCode == KeyCode.SYMBOL) {
-            // ctrl and alt stay active when the layer is changed, they are on the symbol layers and may be used with a letter
         } else if (metaState != 0) {
+            // modifiers that were tapped stay active while a key is held, e.g. shift + arrow to select,
+            // and when the layer is changed, e.g. ctrl on the alt layer and a letter on the letters layer
+            val keepTapped = isKeyRepeat || primaryCode == KeyCode.SYMBOL_ALPHA || primaryCode == KeyCode.ALPHA
+                    || primaryCode == KeyCode.SYMBOL || primaryCode == KeyCode.DPAD
             // non-meta key -> unset all set / released_but_active, and mark pressed as UNSET_ON_RELEASE
             metaPressStates.forEach { key, value ->
+                if (keepTapped && value != MetaPressState.PRESSED) return@forEach
                 if (value == MetaPressState.RELEASED_BUT_ACTIVE || value == MetaPressState.SET) {
                     metaPressStates[key] = MetaPressState.UNSET
                     keyboardSwitcher.mainKeyboardView?.updateLockState(key, false)
@@ -538,6 +541,7 @@ class KeyboardActionListenerImpl(private val latinIME: LatinIME, private val inp
             KeyCode.META, KeyCode.META_LOCK -> KeyEvent.META_META_ON
             KeyCode.META_LEFT               -> KeyEvent.META_META_LEFT_ON
             KeyCode.META_RIGHT              -> KeyEvent.META_META_RIGHT_ON
+            KeyCode.SHIFT_META              -> KeyEvent.META_SHIFT_ON
             else -> null
         }
 

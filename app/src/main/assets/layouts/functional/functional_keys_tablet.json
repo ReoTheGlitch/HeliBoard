@@ -28,8 +28,9 @@
     { "$": "keyboard_state_selector", "symbols": { "label": "numpad" } },
     { "label": "space" },
     { "$": "keyboard_state_selector",
-      "symbols": { "$": "keyboard_state_selector", "dpadKeyEnabled": { "label": "dpad" } },
-      "dpad": { "label": "symbol" }
+      "symbols": { "$": "keyboard_state_selector", "dpadKeyEnabled": { "label": "Alt", "code": -10054, "type": "function", "labelFlags": 1073741824 } },
+      "moreSymbols": { "$": "keyboard_state_selector", "dpadKeyEnabled": { "label": "Alt", "code": -10054, "type": "function", "labelFlags": 1073741824 } },
+      "dpad": { "label": "?123", "code": -202, "type": "function", "labelFlags": 1073741824 }
     },
     { "label": "period" },
     { "$": "variation_selector",

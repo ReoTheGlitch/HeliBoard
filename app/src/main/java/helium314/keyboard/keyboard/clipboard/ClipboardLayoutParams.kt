@@ -40,7 +40,7 @@ class ClipboardLayoutParams(ctx: Context) {
         val topPadding = res.getFraction(R.fraction.config_keyboard_top_padding_holo,
                 defaultKeyboardHeight, defaultKeyboardHeight).toInt()
 
-        val rowCount = KeyboardParams.DEFAULT_KEYBOARD_ROWS + sv.mExtraRows
+        val rowCount = KeyboardParams.DEFAULT_KEYBOARD_ROWS + if (sv.mShowsNumberRow) 1 else 0
         bottomRowKeyboardHeight = (defaultKeyboardHeight - bottomPadding - topPadding) / rowCount - keyVerticalGap / 2
         // nothing that is tapped is lower than the recommended 48 dp for touch screens, unless the keys of the keyboard are smaller too
         val minTouchSize = (48 * res.displayMetrics.density).toInt()

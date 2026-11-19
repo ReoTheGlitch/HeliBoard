@@ -72,17 +72,13 @@ public final class ResourceUtils {
         if (settingsValues.mIsFloatingKeyboard) {
             return settingsValues.mFloatingHeight;
         }
-        int defaultKeyboardHeight = getDefaultKeyboardHeight(res, settingsValues.mExtraRows);
+        int defaultKeyboardHeight = getDefaultKeyboardHeight(res, settingsValues.mShowsNumberRow);
         return (int)(defaultKeyboardHeight * settingsValues.mKeyboardHeightScale);
     }
 
     public static int getDefaultKeyboardHeight(final Resources res, final boolean showsNumberRow) {
-        return getDefaultKeyboardHeight(res, showsNumberRow ? 1 : 0);
-    }
-
-    public static int getDefaultKeyboardHeight(final Resources res, final int extraRows) {
         final DisplayMetrics dm = res.getDisplayMetrics();
-        final float keyboardHeight = res.getDimension(R.dimen.config_default_keyboard_height) * (1f + 0.33f * extraRows);
+        final float keyboardHeight = res.getDimension(R.dimen.config_default_keyboard_height) * (showsNumberRow ? 1.33f : 1f);
         final float maxKeyboardHeight = res.getFraction(
                 R.fraction.config_max_keyboard_height, dm.heightPixels, dm.heightPixels);
         float minKeyboardHeight = res.getFraction(
