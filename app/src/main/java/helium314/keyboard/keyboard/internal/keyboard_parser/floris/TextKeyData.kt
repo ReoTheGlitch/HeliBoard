@@ -254,6 +254,18 @@ sealed interface KeyData : AbstractKeyData {
         private const val POPUP_KEYS_NAVIGATE_NEXT = "!icon/clipboard_action_key|!code/key_clipboard,!icon/next_key|!code/key_action_next"
         private const val POPUP_KEYS_NAVIGATE_PREVIOUS_NEXT = "!fixedColumnOrder!3,!needsDividers!,!icon/previous_key|!code/key_action_previous,!icon/clipboard_action_key|!code/key_clipboard,!icon/next_key|!code/key_action_next"
         private const val POPUP_KEYS_NAVIGATE_EMOJI_PREVIOUS = "!fixedColumnOrder!3,!needsDividers!,!icon/previous_key|!code/key_action_previous,!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji"
+        // backslash must be escaped in popup key texts
+        private val EMOTICON_POPUP_KEYS = listOf(
+            Key.POPUP_KEYS_HAS_LABELS, Key.POPUP_KEYS_AUTO_COLUMN_ORDER + "4",
+            "(◕‿◕)", "ʕ•ᴥ•ʔ",
+            "(ಠ_ಠ)", "ಥ_ಥ",
+            "¯\\\\_(ツ)_/¯", "(╯°□°)╯",
+            "(づ◕‿◕)づ", "ヽ(・∀・)ﾉ",
+            "(=^･ω･^=)", "(╥﹏╥)",
+            "(¬‿¬)", "♪(´▽｀)",
+            "\\\\o/", "TwT",
+            ":3", "^_^",
+        )
         private const val POPUP_KEYS_NAVIGATE_EMOJI = "!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji"
         private const val POPUP_KEYS_NAVIGATE_EMOJI_NEXT = "!fixedColumnOrder!3,!needsDividers!,!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji,!icon/next_key|!code/key_action_next"
         private const val POPUP_KEYS_NAVIGATE_EMOJI_PREVIOUS_NEXT = "!fixedColumnOrder!4,!needsDividers!,!icon/previous_key|!code/key_action_previous,!icon/clipboard_action_key|!code/key_clipboard,!icon/emoji_action_key|!code/key_emoji,!icon/next_key|!code/key_action_next"
@@ -443,7 +455,8 @@ sealed interface KeyData : AbstractKeyData {
             }
             KeyLabel.SPACE -> if (params.mId.element.isNumberLayout) Key.LABEL_FLAGS_ALIGN_ICON_TO_BOTTOM else 0
             KeyLabel.SHIFT -> Key.LABEL_FLAGS_PRESERVE_CASE
-            toolbarKeyStrings[ToolbarKey.EMOJI] -> KeyboardTheme.getThemeActionAndEmojiKeyLabelFlags(params.mThemeId)
+            // the emoticons in the popup keep their case
+            toolbarKeyStrings[ToolbarKey.EMOJI] -> Key.LABEL_FLAGS_PRESERVE_CASE or KeyboardTheme.getThemeActionAndEmojiKeyLabelFlags(params.mThemeId)
             KeyLabel.COM -> Key.LABEL_FLAGS_AUTO_X_SCALE or Key.LABEL_FLAGS_FONT_NORMAL or Key.LABEL_FLAGS_PRESERVE_CASE
             KeyLabel.CURRENCY -> Key.LABEL_FLAGS_FOLLOW_KEY_LETTER_RATIO
             KeyLabel.CTRL, KeyLabel.ALT, KeyLabel.FN, KeyLabel.META -> Key.LABEL_FLAGS_PRESERVE_CASE
@@ -473,6 +486,8 @@ sealed interface KeyData : AbstractKeyData {
             )
 
             KeyLabel.ZWNJ -> SimplePopups(listOf("!icon/zwj_key|\u200D"))
+            // long-press on the emoji key shows emoticons
+            toolbarKeyStrings[ToolbarKey.EMOJI] -> SimplePopups(EMOTICON_POPUP_KEYS)
             // only add currency popups if there are none defined on the key
             KeyLabel.CURRENCY -> if (popup.isEmpty()) SimplePopups(params.mLocaleKeyboardInfos.currencyKey.second) else null
             else -> null

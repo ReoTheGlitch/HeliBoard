@@ -288,7 +288,9 @@ public final class PopupKeysKeyboard extends Keyboard {
                         R.dimen.config_popup_keys_keyboard_key_horizontal_padding)
                         + (key.hasLabelsInPopupKeys()
                                 ? mParams.mAbsolutePopupKeyWidth * LABEL_PADDING_RATIO : 0.0f);
-                keyWidth = getMaxKeyWidth(key, mParams.mAbsolutePopupKeyWidth, padding, paintToMeasure);
+                // a popup key is never wider than the keyboard
+                keyWidth = Math.min(getMaxKeyWidth(key, mParams.mAbsolutePopupKeyWidth, padding, paintToMeasure),
+                        Math.max(keyboard.mId.getWidth(), mParams.mAbsolutePopupKeyWidth));
                 rowHeight = keyboard.mMostCommonKeyHeight;
             }
             final int dividerWidth;

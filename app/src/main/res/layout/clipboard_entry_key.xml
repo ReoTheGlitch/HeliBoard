@@ -4,6 +4,7 @@
 -->
 <LinearLayout
         xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
@@ -41,6 +42,25 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="4"/>
+        <!-- date and time the clip was last copied or pinned -->
+        <TextView
+            android:id="@+id/clipboard_entry_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:alpha="0.6"
+            android:ellipsize="end"
+            android:singleLine="true"/>
     </LinearLayout>
+
+    <!-- shown while the clip is selected -->
+    <TextView
+        android:id="@+id/clipboard_entry_selected_mark"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="8dp"
+        android:text="✓"
+        android:visibility="gone"
+        tools:ignore="HardcodedText" />
 
 </LinearLayout>

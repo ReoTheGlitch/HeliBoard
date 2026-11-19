@@ -325,7 +325,18 @@ f""", // no newline at the end
     }
 
     @Test fun emojiKey() {
-        assertIsExpected("""[[{ "label": "emoji" }]]""", Expected(KeyCode.EMOJI, icon = "emoji", background = Key.BACKGROUND_TYPE_FUNCTIONAL))
+        // long-press on the emoji key shows emoticons, the key itself is unchanged
+        val key = LayoutParser.parseJsonString("""[[{ "label": "emoji" }]]""")
+            .flatMap { row -> row.mapNotNull { it.compute(params) } }.single().toKeyParams(params)
+        assertEquals(KeyCode.EMOJI, key.mCode)
+        assertEquals("emoji", key.mIconName)
+        assertEquals(null, key.mLabel)
+        assertEquals(Key.BACKGROUND_TYPE_FUNCTIONAL, key.mBackgroundType)
+        val popups = key.mPopupKeys!!.map { it.mLabel to it.mOutputText }
+        assertEquals(16, popups.size)
+        assertTrue(popups.all { it.first == it.second })
+        assertTrue(popups.containsAll(listOf("\\o/" to "\\o/", "TwT" to "TwT", ":3" to ":3")))
+        assertTrue(LayoutUtilsCustom.checkKeys(listOf(listOf(key))))
     }
 
     @Test fun invalidKeys() {

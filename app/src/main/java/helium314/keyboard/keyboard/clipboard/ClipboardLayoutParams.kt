@@ -2,6 +2,8 @@
 
 package helium314.keyboard.keyboard.clipboard
 
+import kotlin.math.max
+import kotlin.math.min
 import android.content.Context
 import android.view.View
 import android.widget.FrameLayout
@@ -16,7 +18,12 @@ class ClipboardLayoutParams(ctx: Context) {
     private val keyVerticalGap: Int
     private val keyHorizontalGap: Int
     private val listHeight: Int
+    private val listHeightWithInput: Int
     val bottomRowKeyboardHeight: Int
+    /** height of the folder bar at the top of the clipboard panel */
+    val headerHeight: Int
+    /** height of one row of the small input keyboard, which replaces the bottom row while typing */
+    val inputRowHeight: Int
 
     init {
         val res = ctx.resources
@@ -35,14 +42,22 @@ class ClipboardLayoutParams(ctx: Context) {
 
         val rowCount = KeyboardParams.DEFAULT_KEYBOARD_ROWS + if (sv.mShowsNumberRow) 1 else 0
         bottomRowKeyboardHeight = (defaultKeyboardHeight - bottomPadding - topPadding) / rowCount - keyVerticalGap / 2
+        // nothing that is tapped is lower than the recommended 48 dp for touch screens, unless the keys of the keyboard are smaller too
+        val minTouchSize = (48 * res.displayMetrics.density).toInt()
+        headerHeight = max(bottomRowKeyboardHeight * 3 / 4, min(minTouchSize, bottomRowKeyboardHeight))
+        inputRowHeight = max(bottomRowKeyboardHeight * 17 / 20, min(minTouchSize, bottomRowKeyboardHeight))
         // height calculation is not good enough, probably also because keyboard top padding might be off by a pixel (see KeyboardParser)
         val offset = 1.25f * res.displayMetrics.density * sv.mKeyboardHeightScale
-        listHeight = defaultKeyboardHeight - bottomRowKeyboardHeight - bottomPadding + offset.toInt()
+        listHeight = defaultKeyboardHeight - headerHeight - bottomRowKeyboardHeight - bottomPadding + offset.toInt()
+        // while typing, the input keyboard takes the place of the bottom row
+        // the list keeps room for about two rows of clips, the panel gets higher than the keyboard for that
+        listHeightWithInput = max(bottomRowKeyboardHeight * 2,
+            defaultKeyboardHeight - headerHeight - ClipboardMiniKeyboard.ROW_COUNT * inputRowHeight - bottomPadding + offset.toInt())
     }
 
-    fun setListProperties(recycler: RecyclerView) {
+    fun setListProperties(recycler: RecyclerView, inputKeyboardShown: Boolean = false) {
         (recycler.layoutParams as FrameLayout.LayoutParams).apply {
-            height = listHeight
+            height = if (inputKeyboardShown) listHeightWithInput else listHeight
             recycler.layoutParams = this
         }
     }

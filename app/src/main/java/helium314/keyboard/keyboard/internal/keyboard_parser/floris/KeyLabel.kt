@@ -105,7 +105,9 @@ object KeyLabel {
             SPACE -> getSpaceLabel(params)
             ACTION -> "${getActionKeyLabel(params)}|${getActionKeyCode(params)}"
             DELETE -> "!icon/delete_key|!code/key_delete"
-            SHIFT -> "${getShiftLabel(params)}|!code/key_shift"
+            // on the layer with ctrl and alt, shift is used together with the next key, like on a computer
+            SHIFT -> if (params.mId.element == KeyboardElement.DPAD) "!icon/${KeyboardIconsSet.NAME_SHIFT_KEY}|!code/${KeyCode.SHIFT_META}"
+                else "${getShiftLabel(params)}|!code/key_shift"
             COM -> params.mLocaleKeyboardInfos.tlds.first()
             LANGUAGE_SWITCH -> "!icon/language_switch_key|!code/key_language_switch"
             ZWNJ -> "!icon/zwnj_key|\u200C"

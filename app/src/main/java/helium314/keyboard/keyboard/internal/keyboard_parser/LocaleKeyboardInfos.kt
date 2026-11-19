@@ -216,6 +216,9 @@ class LocaleKeyboardInfos(dataStream: InputStream?, locale: Locale) {
                 POPUP_KEYS_MORE -> lkt.addFile(context.assets.open("$LOCALE_TEXTS_FOLDER/more_popups_more.txt"), false)
                 POPUP_KEYS_ALL -> lkt.addFile(context.assets.open("$LOCALE_TEXTS_FOLDER/more_popups_all.txt"), false)
             }
+            // symbols on the letters and more punctuation, in addition to the letters with accents
+            if (popupKeysSetting != POPUP_KEYS_NORMAL)
+                lkt.addFile(context.assets.open("$LOCALE_TEXTS_FOLDER/more_popups_symbols.txt"), false)
             lkt.addLocaleTlds(params.mId.locale)
             return lkt
         }

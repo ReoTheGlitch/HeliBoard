@@ -78,7 +78,7 @@ object Defaults {
     const val PREF_BLOCK_POTENTIALLY_OFFENSIVE = true
     const val PREF_SHOW_LANGUAGE_SWITCH_KEY = false
     const val PREF_LANGUAGE_SWITCH_KEY = "internal"
-    const val PREF_SHOW_EMOJI_KEY = false
+    const val PREF_SHOW_EMOJI_KEY = true // its long-press has emoticons
     const val PREF_SHOW_DPAD_KEY = true
     const val PREF_VARIABLE_TOOLBAR_DIRECTION = true
     const val PREF_ADDITIONAL_SUBTYPES = "de${Separators.SET}${ExtraValue.KEYBOARD_LAYOUT_SET}=MAIN:qwerty${Separators.SETS}" +
@@ -161,10 +161,10 @@ object Defaults {
     const val PREF_TOUCHPAD_SENSITIVITY = 50
     const val PREF_TOUCHPAD_EDGE_SCROLL = true
     const val PREF_ENABLE_CLIPBOARD_HISTORY = true
-    const val PREF_CLIPBOARD_HISTORY_RETENTION_TIME = 10 // minutes
+    const val PREF_CLIPBOARD_HISTORY_RETENTION_TIME = 121 // minutes, above 120 means no limit (nothing is removed automatically)
     const val PREF_CLIPBOARD_HISTORY_PINNED_FIRST = true
     const val PREF_CLIPBOARD_USE_FILES = true
-    const val PREF_CLIPBOARD_FILES_SIZE_LIMIT = 20 // megabytes
+    const val PREF_CLIPBOARD_FILES_SIZE_LIMIT = 1001 // megabytes per file, above 1000 means no limit
     const val PREF_ADD_TO_PERSONAL_DICTIONARY = false
     @JvmField
     val PREF_NAVBAR_COLOR = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
@@ -199,6 +199,6 @@ object Defaults {
     const val PREF_USER_MORE_COLORS = 0
     const val PREF_USER_ALL_COLORS = ""
     const val PREF_SAVE_SUBTYPE_PER_APP = false
-    const val PREF_SPELLCHECK_SUGGEST = true
+    const val PREF_SPELLCHECK_SUGGEST = false
     const val PREF_SHOW_ONLY_TOOLBAR_WITH_HARDWARE_KEYBOARD = false
 }

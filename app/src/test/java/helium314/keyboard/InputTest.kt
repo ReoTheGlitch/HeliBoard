@@ -98,7 +98,7 @@ class InputTest {
             y.toFloat(),
             0
         )
-        keyboardSwitcher.mainKeyboardView.onTouchEvent(me)
+        keyboardSwitcher.mainKeyboardView!!.onTouchEvent(me)
     }
 
     @BeforeTest

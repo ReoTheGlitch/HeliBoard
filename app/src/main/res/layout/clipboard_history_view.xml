@@ -13,6 +13,11 @@
     android:background="@android:color/transparent"
     style="?attr/clipboardHistoryViewStyle">
 
+    <helium314.keyboard.keyboard.clipboard.ClipboardFolderBar
+        android:id="@+id/clipboard_folder_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
@@ -38,5 +43,11 @@
         android:id="@+id/bottom_row_keyboard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
+
+    <helium314.keyboard.keyboard.clipboard.ClipboardMiniKeyboard
+        android:id="@+id/clipboard_mini_keyboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
 
 </helium314.keyboard.keyboard.clipboard.ClipboardHistoryView>
